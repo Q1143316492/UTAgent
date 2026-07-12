@@ -1,0 +1,21 @@
+﻿{
+    "name": "EqZeroUT2.UTAgent.Editor",
+    "rootNamespace": "UTAgent.Editor",
+    "references": [
+        "EqZeroUT2.UTAgent.Runtime",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [
+        "Python.Runtime.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

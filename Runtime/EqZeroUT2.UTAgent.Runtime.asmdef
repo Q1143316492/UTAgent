@@ -1,0 +1,14 @@
+﻿{
+    "name": "EqZeroUT2.UTAgent.Runtime",
+    "rootNamespace": "UTAgent",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

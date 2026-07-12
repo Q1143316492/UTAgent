@@ -1,0 +1,87 @@
+﻿---
+name: python-interop
+description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_bind.CS），观察回灌，禁止无效探索。"
+---
+
+## 三层决策树（对标 Puerts builtins → type-reflection → CS.*）
+
+```
+用户任务
+  → execPython（持久 ScriptEnv 命名空间，预置 unity + CS）
+      L1: import unity          — 高频动词（截图、层级、Scene View…）
+      L2: unity.list_editor_namespaces / get_type_details — 发现 API（已过滤）
+      L3: from unity_bind import CS — 白名单内动态 CLR（CS.UnityEngine.*）
+```
+
+**禁止**：首步 `help(unity)` / `dir(unity)` / 无过滤 `list_namespaces()` / 读 `Assets/**/*.cs` / `import clr`。
+
+**是否新增 L1 动词**：须对照 Puerts `builtins` / 现有 `unity` 动词清单再立项，本模块不擅自扩展。
+
+## 观察回灌（流程关键）
+
+| 写法 | Agent tool 结果里能否看到 |
+|------|---------------------------|
+| `unity.get_hierarchy()` / `find_object` / `find_objects` / `get_type_details` | ✅ 自动 echo 到 stdout |
+| `print(...)` | ✅ stdout |
+| `unity.log(...)` | ❌ 仅 Unity Console，**不能**当侦察依据 |
+
+- 侦察脚本末行用 `print` 或让 L1 动词作末行表达式；**不要**连跑多步「空 stdout 侦察」
+- `find_objects` 返回 **dict**，用 `result["count"]`，不是 `len(result)`
+
+## 任务类型
+
+| 用户任务 | 做法 |
+|----------|------|
+| 拼/改 Editor UI、预制体、布局 | **先** `loadSkill("editor-ui")`，再单步 execPython |
+| 不确定场景有无 Canvas | 最多 **1 步** `find_object("Canvas")` 再创建 |
+| 上一步失败 | patch / destroy_all，禁止盲目重建（见下） |
+
+## Edit Mode 安全
+
+| ❌ 运行期 API | ✅ 替代 |
+|---|---|
+| `Object.Destroy` | `unity.destroy_object(name)` |
+| 清理同名对象 | `unity.prepare_scene_object(name)` / `unity.destroy_all_objects(name)` |
+| `StartCoroutine` | 不使用 |
+
+**Graphic 互斥**：同一 GameObject 不能同时挂 Image 与 TMP。按钮结构：根 Image+Button，子 `TxtLabel` 挂 TMP。
+
+**创建前**：`unity.prepare_scene_object(目标根名)`。**失败修补**：读 tool result 的 `recommended_action`；`patch_existing_only` 时禁止整段重建。
+
+## L1 — `import unity`（动词优先）
+
+- 截图：`unity.capture_scene_view()`（勿 print 含 base64 的返回值）
+- **DeepSeek / 纯文本模型**：验收用 `find_objects` + `print`，不要为验收调截图
+- 层级：`unity.find_object` / `unity.find_objects` / `unity.get_hierarchy`
+- 销毁：`unity.destroy_object` / `unity.prepare_scene_object` / `unity.destroy_all_objects`
+- 镜头：`unity.scene_view_*` / `unity.focus_scene_view_on`
+
+有对应 L1 动词时 **必须** 用 L1，不要跳到 L3。
+
+## L2 — 过滤后自省
+
+```python
+import unity
+unity.get_type_details("UnityEngine.UI.Button,TMPro.TextMeshProUGUI")
+```
+
+## L3 — `from unity_bind import CS`（动词不够时）
+
+对标 Puerts `CS.*`。Editor 创建/改场景 UI、PrefabUtility 等走 L3。
+
+- 场景已有 `Canvas` 时 **不要** 再新建第二个 Canvas
+- 创建类脚本末行用 `print(...)` / `unity.save_scene()`
+- Editor 里 **创建/改场景 UI** 走 L1+L3 + `loadSkill("editor-ui")`，不是 `unity.ui.core`
+
+## Play 模式 — `unity.ui.core`（仅运行时面板）
+
+| 场景 | 模块 |
+|---|---|
+| Editor 改场景 / 加控件 | L1 + L3 + `loadSkill("editor-ui")` |
+| Play 打开已注册面板 | `unity.ui.core`（WndBase / WindowManager） |
+
+## 执行规则
+
+- **必须** 用 `execPython` 工具；正文不贴 ```python 作为执行路径
+- **场景创建**：脚本开头 `unity.prepare_scene_object(目标名)`
+- `CS` 与 `unity` 在持久 exec 环境中跨步可用；**创建类任务仍应单步完成**

@@ -1,0 +1,154 @@
+---
+name: editor-ui
+description: "Editor 拼/改 Canvas UI：命名、布局套路、配色角色、预制体、通用工作流。"
+---
+
+## 何时用
+
+Editor 拼/改 Canvas UI、调整布局、保存预制体。**任意面板**（登录、设置、弹窗等）均适用；示例仅为结构模板。
+
+## 工作流（6 步）
+
+1. 定 `Wnd{Feature}` 与控件清单（`Txt*` / `Btn*` / `Input*` / `Grp*`）
+2. 已 `loadSkill("editor-ui")` 则跳过
+3. **先选布局套路** L1–L5（见下），再写代码
+4. 为当前界面分配配色角色（见下）
+5. **单步** `execPython` 创建（LayoutGroup 优先，禁止手摆 5+ 个坐标）
+6. `find_objects` + `get_hierarchy` 验收；`print` 关键 Image/TMP 的 color 分量
+
+## 命名 v2（无 Go 后缀）
+
+| 类型 | 示例 |
+|------|------|
+| 面板根 | `WndLogin`, `WndSettings` |
+| 按钮 | `BtnSubmit`, `BtnCancel` |
+| 文本 | `TxtTitle`, `TxtHint` |
+| 输入 | `InputAccount` |
+| 容器 | `GrpForm`, `GrpFooter` |
+| 按钮文案子节点 | `BtnSubmit/TxtLabel` |
+
+**禁止**：`WndLoginGo`、`LoginBtn`、`Button`、`Test*`、中文名、同节点 Image+TMP。
+
+预制体：`Assets/Prefabs/UI/Wnd{Feature}/Wnd{Feature}.prefab`
+
+## 布局套路（必须先选）
+
+| ID | 适用 | 结构 |
+|----|------|------|
+| **L1** 居中卡片 | 弹窗、表单 | 可选 `ImgOverlay` + 居中 `Wnd*`；`GrpBody` + `VerticalLayoutGroup` + `ContentSizeFitter` |
+| **L2** 顶栏+内容 | 设置、列表 | `GrpHeader`（固定高）+ `GrpBody`（stretch） |
+| **L3** 底栏按钮行 | 双按钮 | `GrpFooter` + `HorizontalLayoutGroup` |
+| **L4** 表单单列 | 多输入 | `GrpForm` + `VerticalLayoutGroup`，spacing=16 |
+| **L5** 工具条 | 横排控件 | `GrpToolbar` + `HorizontalLayoutGroup` |
+
+默认 **L1**；标题+底栏双按钮用 **L1+L3**。LayoutGroup 默认：`spacing=16`，`padding=24`。
+
+## 配色角色（自选 RGB，须满足对比）
+
+| 角色 | 规则 |
+|------|------|
+| Surface | 面板底，暗色（RGB 均 <0.25），禁止纯白底 |
+| TextPrimary | 亮于 Surface，标题/正文 |
+| TextSecondary | 比 TextPrimary 暗一档，占位/说明 |
+| Accent | **唯一**主按钮，饱和色 |
+| Neutral | 次按钮，低饱和 |
+
+**硬规则**：至少 3 档明度；禁止全同色；输入框底须与面板可区分。
+
+## 验收 checklist
+
+- [ ] `Wnd{Feature}` count=1，无 `Wnd*Go`
+- [ ] 存在 `VerticalLayoutGroup` 或 `HorizontalLayoutGroup`
+- [ ] 主按钮与面板底色可区分
+- [ ] `print` 各角色 color 供 log 自查
+
+## 示例 A — 表单面板（结构模板）
+
+照结构改 `Feature` 与字段名，勿照抄业务：
+
+```python
+import unity
+from unity_bind import CS
+
+feature = "Login"  # 可改为 Settings 等
+root_name = f"Wnd{feature}"
+unity.prepare_scene_object(root_name)
+
+canvas = CS.UnityEngine.GameObject.Find("Canvas")
+if canvas is None:
+    raise RuntimeError("Canvas not found")
+
+# L1 居中卡片 — Surface 暗色
+wnd = CS.UnityEngine.GameObject(root_name)
+wnd.transform.SetParent(canvas.transform, False)
+img = wnd.AddComponent(CS.UnityEngine.UI.Image)
+img.color = CS.UnityEngine.Color(0.15, 0.15, 0.18, 0.98)
+rt = wnd.GetComponent(CS.UnityEngine.RectTransform)
+rt.sizeDelta = CS.UnityEngine.Vector2(400, 480)
+
+grp_body = CS.UnityEngine.GameObject("GrpBody")
+grp_body.transform.SetParent(wnd.transform, False)
+vlg = grp_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
+vlg.spacing = 16
+vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
+vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
+csf = grp_body.AddComponent(CS.UnityEngine.UI.ContentSizeFitter)
+csf.verticalFit = CS.UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize
+body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
+body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
+body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
+body_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
+body_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
+
+# 标题 TxtTitle
+title = CS.UnityEngine.GameObject("TxtTitle")
+title.transform.SetParent(grp_body.transform, False)
+tmp = title.AddComponent(CS.TMPro.TextMeshProUGUI)
+tmp.text = "Title"
+tmp.fontSize = 28
+tmp.color = CS.UnityEngine.Color(0.95, 0.95, 0.95, 1)
+tmp.alignment = CS.TMPro.TextAlignmentOptions.Center
+
+# Input 字段（按需增减）
+for purpose in ("Account", "Password"):
+    inp = CS.UnityEngine.GameObject(f"Input{purpose}")
+    inp.transform.SetParent(grp_body.transform, False)
+    inp.AddComponent(CS.UnityEngine.UI.Image).color = CS.UnityEngine.Color(0.22, 0.22, 0.26, 1)
+    inp.AddComponent(CS.TMPro.TMP_InputField)
+
+# L3 底栏 — BtnSubmit Accent
+btn = CS.UnityEngine.GameObject("BtnSubmit")
+btn.transform.SetParent(grp_body.transform, False)
+btn.AddComponent(CS.UnityEngine.UI.Image).color = CS.UnityEngine.Color(0.23, 0.51, 0.96, 1)
+btn.AddComponent(CS.UnityEngine.UI.Button)
+label = CS.UnityEngine.GameObject("TxtLabel")
+label.transform.SetParent(btn.transform, False)
+lbl = label.AddComponent(CS.TMPro.TextMeshProUGUI)
+lbl.text = "Submit"
+lbl.fontSize = 18
+lbl.color = CS.UnityEngine.Color(1, 1, 1, 1)
+lbl.alignment = CS.TMPro.TextAlignmentOptions.Center
+
+unity.save_scene()
+print(unity.find_objects(root_name))
+print(unity.get_hierarchy(root_name))
+```
+
+## 示例 B — WndSettings（标题 + 双按钮）
+
+**L1+L3**：`WndSettings` + `TxtTitle` + `GrpFooter`/`HorizontalLayoutGroup` + `BtnCancel`(Neutral) + `BtnSave`(Accent)。照示例 A 改 `feature` 与 Purpose。
+
+## 保存预制体（L3）
+
+```python
+import os
+from unity_bind import CS
+
+feature = "Settings"
+root_name = f"Wnd{feature}"
+root = CS.UnityEngine.GameObject.Find(root_name)
+prefab_dir = f"Assets/Prefabs/UI/{root_name}"
+os.makedirs(prefab_dir, exist_ok=True)
+CS.UnityEditor.PrefabUtility.SaveAsPrefabAsset(root, f"{prefab_dir}/{root_name}.prefab")
+print(f"saved: {prefab_dir}/{root_name}.prefab")
+```
