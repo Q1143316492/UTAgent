@@ -156,6 +156,7 @@ def find_object(name, echo=True):
 def find_objects(name, echo=True):
     """在当前活动场景中按名查找所有 GameObject（遍历层级，含非激活对象）。
 
+    inactive 节点 GameObject.Find 找不到时须用本函数（见 python-interop §UI 任务必读）。
     返回 {"success": True, "count": int, "objects": [...]}（用 result["count"]，不是 len(result)）。
     """
     if not isinstance(name, str) or not name.strip():
@@ -282,7 +283,7 @@ def look_at(name, target):
 
 
 def destroy_object(name):
-    """销毁一个 GameObject（Edit Mode 安全：内部使用 DestroyImmediate）。
+    """销毁一个 GameObject（Edit Mode 安全：内部 DestroyImmediate，见 python-interop §Edit Mode）。
 
     重名时只销毁 GameObject.Find 找到的那一个。要清空全部同名对象用 destroy_all_objects。
     返回 {"success": True, "destroyed": str}
@@ -306,6 +307,7 @@ def destroy_all_objects(name):
 def prepare_scene_object(name):
     """场景编辑幂等准备：销毁活动场景中全部同名对象（创建同名对象前调用）。
 
+    Edit Mode 创建 UI 测试节点前须调用（见 python-interop §UI 任务必读）。
     等价于 destroy_all_objects；语义更贴近「创建前先清理」。
     返回 {"success": True, "destroyedCount": int, "destroyedInstanceIds": [int, ...]}
     """

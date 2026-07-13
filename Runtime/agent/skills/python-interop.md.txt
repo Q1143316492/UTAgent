@@ -1,6 +1,6 @@
 ﻿---
 name: python-interop
-description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_bind.CS），观察回灌，禁止无效探索。"
+description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_bind.CS），Edit Mode 安全，观察回灌，禁止无效探索。"
 ---
 
 ## 三层决策树（对标 Puerts builtins → type-reflection → CS.*）
@@ -37,17 +37,54 @@ description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_b
 | 不确定场景有无 Canvas | 最多 **1 步** `find_object("Canvas")` 再创建 |
 | 上一步失败 | patch / destroy_all，禁止盲目重建（见下） |
 
-## Edit Mode 安全
+## Edit Mode 默认假设
 
-| ❌ 运行期 API | ✅ 替代 |
-|---|---|
-| `Object.Destroy` | `unity.destroy_object(name)` |
-| 清理同名对象 | `unity.prepare_scene_object(name)` / `unity.destroy_all_objects(name)` |
-| `StartCoroutine` | 不使用 |
+Agent **默认在 Edit Mode**（`Application.isPlaying == false`），除非用户明确说在 Play Mode。
 
-**Graphic 互斥**：同一 GameObject 不能同时挂 Image 与 TMP。按钮结构：根 Image+Button，子 `TxtLabel` 挂 TMP。
+不确定时可在 exec 内读取：
+
+```python
+from unity_bind import CS
+is_playing = CS.UnityEngine.Application.isPlaying
+```
+
+**Rule**：用户未声明 Play Mode 时，一律按 Edit Mode 安全 API 写代码。
+
+## UI 任务必读（Edit Mode）
+
+Editor UI 创建/排查时 **优先遵守** 下列规则（硬验收也覆盖这些）：
+
+| 陷阱 | UI 场景 | ✅ 正确做法 |
+|------|---------|------------|
+| `Object.Destroy` | 删测试 Btn / Wnd | `unity.destroy_object(name)` |
+| 创建前同名残留 | 重复堆叠 `Btn*` / `Wnd*` | 脚本开头 `unity.prepare_scene_object(目标名)` |
+| `GameObject.Find(name)` | 查 **inactive** 的 `WndLogin` 等 | `unity.find_objects(name)`（含非激活） |
+| `Instantiate(prefab)` | 把 UI prefab 放进 Canvas | L3：`CS.UnityEditor.PrefabUtility.InstantiatePrefab(asset)` |
+| `SetActive` 后等 `Awake`/`Start` | 新建 UI 以为逻辑已跑 | Edit Mode **不调用** Awake/Start；手动设字段或调初始化 |
+| 第二个 Canvas | 创建 UI 根 | 场景已有 `Canvas` 时 **复用**，勿再 `new GameObject("Canvas")` |
+| Image + TMP 同 GO | 按钮结构 | 根 **Image+Button**，子 `TxtLabel` 挂 **TMP**（互斥） |
 
 **创建前**：`unity.prepare_scene_object(目标根名)`。**失败修补**：读 tool result 的 `recommended_action`；`patch_existing_only` 时禁止整段重建。
+
+**Graphic 互斥**：同一 GameObject 不能同时挂 `UnityEngine.UI.Image` 与 `TextMeshProUGUI`。
+
+## Edit Mode 安全替换表（对标 Puerts）
+
+除非已确认 `Application.isPlaying == true`，否则用右列替代左列：
+
+| ❌ 运行期 / 危险 API | ✅ Edit Mode 安全替代 | 说明 |
+|---------------------|----------------------|------|
+| `renderer.material` | `renderer.sharedMaterial` | `.material` 会实例化副本，Edit Mode 易泄漏（**UI 任务通常不涉及**） |
+| `renderer.materials` | `renderer.sharedMaterials` | 同上 |
+| `meshFilter.mesh` | `meshFilter.sharedMesh` | 同上 |
+| `Object.Destroy(obj)` | `unity.destroy_object(name)` 或 L3 `DestroyImmediate` | `Destroy` 延迟执行，Edit Mode 常删不掉 |
+| `StartCoroutine(...)` | 不使用；或 L3 `EditorApplication.update` | 协程在 Edit Mode 不跑 |
+| `Instantiate(prefab)`（运行期_spawn） | L3 `PrefabUtility.InstantiatePrefab` | Edit Mode 保持 prefab 关联 |
+| `SetActive` 后依赖 `Awake`/`Start` | 手动初始化组件状态 | 生命周期在 Edit Mode 不触发 |
+
+**读材质/网格属性**：只读时用 `sharedMaterial` / `sharedMesh`；勿用 `.material` / `.mesh`。**改**某对象专属材质：Play Mode 用 `.material`；Edit Mode 须显式 `Instantiate(sharedMaterial)` 再赋回 `sharedMaterial`（或接受改 shared 影响所有引用者）。UI 配色任务优先走 `editor-ui` skill，勿在 exec 里乱改 Renderer 材质。
+
+**销毁**：L1 优先 `unity.destroy_object` / `unity.prepare_scene_object` / `unity.destroy_all_objects`；L3 等价 `CS.UnityEngine.Object.DestroyImmediate(go)`。
 
 ## L1 — `import unity`（动词优先）
 
@@ -73,16 +110,23 @@ L2 仍经 `UnityBindWhitelist` 过滤；**不代表** L3 exec 受同一白名单
 对标 Puerts `evalJsCode` 内 `CS.*`：**Editor exec 对已加载程序集动态反射**，无运行时白名单 Filter。
 
 - `CS.GameCore.WindowBase` 等业务类型可用（程序集已在 Unity 域）
-- `CS.UnityEditor.MonoScript` / `AssetDatabase` 等长尾 Editor API 可用
+- `CS.UnityEditor.MonoScript` / `AssetDatabase` / `PrefabUtility` 等长尾 Editor API 可用
 - 场景已有 `Canvas` 时 **不要** 再新建第二个 Canvas
+- Edit Mode 实例化 prefab：`CS.UnityEditor.PrefabUtility.InstantiatePrefab(asset)`
 - 创建类脚本末行用 `print(...)` / `unity.save_scene()`
 - Editor **创建/改** UI 走 L1+L3 + `loadSkill("editor-ui")`；**排查**走 `editor-ui-debug`
 
 ### pythonnet 陷阱（L3）
 
-- 泛型实例化、`out`/`ref`、extension method 可能失败；优先用 golden-path 已验证写法
+- **extension method**（如部分 LINQ 扩展）在 pythonnet 下常失败；改用显式静态调用或 golden-path 已验证写法
+- **`out` / `ref`**：pythonnet 与 C# 签名不匹配时易报错；优先改脚本结构，勿 `import clr` 手搓
+- **泛型实例化**（`List[T]` 等）：可能失败；优先用 golden-path 或非泛型 API
+- **重载解析**：歧义时指定参数类型或换等价 API
+- 查 **脚本路径 / Rect / Button 状态**：用 `loadSkill("editor-ui-debug")` 单步 golden-path，勿多步空 `get_hierarchy`
 - 不要 `import clr`；程序集预载由 `unity_bind` 内部 `ensure_clr` 完成
 - 域重载后若类型解析失败，提示用户 `utagent init` 或重开 exec 会话
+
+**不搬** Puerts TS 专用 API：`puer.$ref` / `$generic` / `$promise` / `get_Item` 大段范例。
 
 ## Play 模式 — `unity.ui.core`（仅运行时面板）
 
