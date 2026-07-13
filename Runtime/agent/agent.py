@@ -871,6 +871,9 @@ def _list_skill_catalog():
     lines.append(
         "Editor 拼/改 Canvas UI、预制体、布局：**必须先** `loadSkill(\"editor-ui\")`，再 `execPython`。"
     )
+    lines.append(
+        "Editor UI **排查**（点不了、错位、查脚本）：**先** `loadSkill(\"editor-ui-debug\")`，再 golden-path 单步 exec。"
+    )
     return "\n".join(lines)
 
 
@@ -898,7 +901,7 @@ def _verb_summary():
         "## 互操作三层（优先顺序）\n"
         "L1 `import unity` — 动词：find_object, get_hierarchy, capture_scene_view, scene_view_*, save_scene, …\n"
         "L2 `unity.list_editor_namespaces()` / `get_type_details(types)` — 过滤后自省（禁止首步 help/dir）\n"
-        "L3 `from unity_bind import CS` — 对标 Puerts `CS.*`（CS.UnityEngine.GameObject…）\n"
+        "L3 `from unity_bind import CS` — 对标 Puerts eval（Editor 对已加载程序集动态反射）\n"
         "\n"
         "## unity 常用动词（L1 简摘）\n"
         "- unity.list_editor_namespaces() / list_types_in_namespace(ns) / get_type_details(types)\n"
@@ -909,8 +912,8 @@ def _verb_summary():
         "\n"
         "## unity_bind CS（L3，动词不够时）\n"
         "- from unity_bind import CS\n"
-        "- CS.UnityEngine.GameObject.Find / new GameObject / AddComponent\n"
-        "- CS.TMPro.TextMeshProUGUI — tmp.text 设文案\n"
+        "- CS.UnityEngine.GameObject.Find / CS.GameCore.* / CS.UnityEditor.MonoScript\n"
+        "- UI 排查：loadSkill(\"editor-ui-debug\") + golden-path 单步 exec\n"
         "- Editor 创建 UI 优先单步完整 execPython 脚本\n"
         "禁止 import clr / import _cs_bridge / 读 Editor/Bridges 源码。\n"
         "\n"

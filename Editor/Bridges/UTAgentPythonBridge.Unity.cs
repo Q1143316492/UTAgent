@@ -47,7 +47,11 @@ namespace UTAgent.Editor.Bridges
             var go = transform.gameObject;
             var components = go.GetComponents<Component>()
                 .Where(c => c != null)
-                .Select(c => EscapeJson(c.GetType().Name))
+                .Select(c =>
+                {
+                    var t = c.GetType();
+                    return $"{{\"shortName\":{EscapeJson(t.Name)},\"fullName\":{EscapeJson(t.FullName)}}}";
+                })
                 .ToArray();
             bool hasChildren = transform.childCount > 0;
             bool atLimit = maxDepth > 0 && currentDepth >= maxDepth;

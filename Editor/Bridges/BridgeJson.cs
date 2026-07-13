@@ -124,13 +124,30 @@ namespace UTAgent.Editor.Bridges
 
                 if (json[i] == '"')
                 {
-                    int end = json.IndexOf('"', i + 1);
-                    if (end < 0)
+                    int k = i + 1;
+                    while (k < json.Length)
+                    {
+                        if (json[k] == '\\')
+                        {
+                            k += 2;
+                            continue;
+                        }
+
+                        if (json[k] == '"')
+                        {
+                            break;
+                        }
+
+                        k++;
+                    }
+
+                    if (k >= json.Length)
                     {
                         return string.Empty;
                     }
 
-                    return json.Substring(i + 1, end - i - 1);
+                    var token = json.Substring(i, k - i + 1);
+                    return UnquoteJsonString(token) ?? string.Empty;
                 }
 
                 int j = i;

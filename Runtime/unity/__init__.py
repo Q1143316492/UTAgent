@@ -171,7 +171,8 @@ def get_hierarchy(name=None, depth=0, echo=True):
 
     name: 根对象名，None/空 = 当前场景所有根对象
     depth: 最大遍历深度，0 = 无限。超限节点用 childCount 代替 children
-    返回 {"success": True, "hierarchy": [...]}
+    返回 {"success": True, "hierarchy": [...]}；各节点 components 为
+    {"shortName": "...", "fullName": "Namespace.Type"} 对象数组。
     """
     result = json.loads(_bridge().GetHierarchy(name or "", depth))
     if echo:

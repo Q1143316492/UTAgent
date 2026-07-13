@@ -5,7 +5,8 @@ using System.Linq;
 namespace UTAgent.Editor.Config
 {
     /// <summary>
-    /// unity_bind CS 代理可调用的 C# 类型/命名空间 Filter（对标 Puerts Configure + Filter）。
+    /// 类型/命名空间白名单配置，供 L2 自省与将来移动端生成器 / link.xml 使用。
+    /// Editor Agent exec 的 L3 unity_bind.CS 不经此 Filter（对标 Puerts eval 全反射）。
     /// </summary>
     public static class UnityBindWhitelist
     {
@@ -43,7 +44,7 @@ namespace UTAgent.Editor.Config
         private static readonly string[] sAllowedPrefixes = BuildAllowedPrefixes();
 
         /// <summary>
-        /// CS 路径是否允许（显式类型名或命名空间前缀）。
+        /// CS 路径是否在白名单内（显式类型名或命名空间前缀）。仅供 L2 / 移动端生成器，非 Editor exec Filter。
         /// </summary>
         public static bool IsAllowedPath(string path)
         {

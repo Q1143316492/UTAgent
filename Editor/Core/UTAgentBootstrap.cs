@@ -102,6 +102,7 @@ namespace UTAgent.Editor
         private static void RegisterBridgeModules(IPythonEngine engine)
         {
             var bridge = UTAgentPythonBridge.Instance;
+            bridge.CsClearResolveCache();
             engine.RegisterModule("_unity_bridge", bridge);
             engine.RegisterModule("_ui_bridge", bridge);
             engine.RegisterModule("_wndmgr_bridge", bridge);

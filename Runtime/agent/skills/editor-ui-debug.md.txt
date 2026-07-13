@@ -1,0 +1,84 @@
+---
+name: editor-ui-debug
+description: "Editor UI 排查与 live 验收：golden-path 单步 exec，只读侦察，不改布局。"
+---
+
+## 何时用本 skill
+
+| 用户诉求 | 本 skill | 改用 |
+|----------|----------|------|
+| 按钮点不了、遮挡、inactive | ✅ | — |
+| 分辨率/锚点/Rect 错位 | ✅ | — |
+| 查脚本路径、组件 live 状态 | ✅ | — |
+| **新建/改布局/保存预制体** | ❌ | `loadSkill("editor-ui")` |
+
+**工作流**：确认症状 →（若未加载）`loadSkill("editor-ui-debug")` → **单步** `execPython` golden-path → 根据 `script` 字段 `Read`/`Grep` 源码或继续 exec 验收。
+
+**禁止**：连续多步仅 `get_hierarchy` 且无 `print` 的空侦察（≥3 步）。
+
+## 症状路由
+
+| 症状 | golden-path 关注字段 |
+|------|---------------------|
+| 按钮点不了 | `interactable`、`activeInHierarchy`、遮挡层 Graphic |
+| 分辨率/适配错位 | `rect.anchorMin/Max`、`sizeDelta`、`anchoredPosition` |
+| 重名 Wnd* / 找错节点 | 先 `unity.find_objects(name)` 再对唯一名跑 `describe_go` |
+| inactive / 看不见 | `activeInHierarchy`、父链 `get_hierarchy(..., depth=3)`；**inactive 节点** `GameObject.Find` 找不到，用 `unity.find_objects(name)` |
+
+## golden-path 模板（单步 exec，参数化节点名）
+
+```python
+import json
+import unity
+from unity_bind import CS
+
+def describe_go(name):
+    """一次 exec：层级 + 脚本路径 + Rect + Button 状态。"""
+    out = {"name": name, "hierarchy": unity.get_hierarchy(name, depth=2, echo=False)}
+    go = CS.UnityEngine.GameObject.Find(name)
+    if go is None:
+        out["error"] = "not found"
+        return out
+    out["activeInHierarchy"] = go.activeInHierarchy
+    components = []
+    for c in go.GetComponents(CS.UnityEngine.Component):
+        if c is None:
+            continue
+        entry = {"fullName": c.GetType().FullName}
+        mb = c if isinstance(c, CS.UnityEngine.MonoBehaviour) else None
+        if mb is not None:
+            script = CS.UnityEditor.MonoScript.FromMonoBehaviour(mb)
+            entry["script"] = CS.UnityEditor.AssetDatabase.GetAssetPath(script)
+        rt = c if isinstance(c, CS.UnityEngine.RectTransform) else None
+        if rt is not None:
+            entry["rect"] = {
+                "anchorMin": [rt.anchorMin.x, rt.anchorMin.y],
+                "anchorMax": [rt.anchorMax.x, rt.anchorMax.y],
+                "sizeDelta": [rt.sizeDelta.x, rt.sizeDelta.y],
+                "anchoredPosition": [rt.anchoredPosition.x, rt.anchoredPosition.y],
+            }
+        btn = c if isinstance(c, CS.UnityEngine.UI.Button) else None
+        if btn is not None:
+            entry["interactable"] = btn.interactable
+        components.append(entry)
+    out["components"] = components
+    return out
+
+target = "BtnSubmit"  # 按症状替换为实际节点名
+print(json.dumps(describe_go(target), ensure_ascii=False))
+```
+
+- 使用 `from unity_bind import CS`；**禁止** `import clr`
+- 末行必须 `print(json.dumps(...))` 以便 Agent tool 看到结果
+- `unity.get_hierarchy(..., echo=False)` 避免重复 echo；最终靠 `print` 回灌
+
+## Cursor 协作
+
+1. `utagent exec` 跑上述脚本（或 Agent `execPython` 同等代码）
+2. stdout 中 `script` 非空 → Cursor `Read` 该 `.cs` 路径
+3. 静态逻辑用 `Grep`；live 状态仍用 exec，不要混用 Puerts MCP 补 CS
+
+## 与 editor-ui 分工
+
+- **本 skill**：只读排查、验收 live 状态
+- **editor-ui**：创建 Canvas 控件、改布局、`save_scene`、预制体流程
