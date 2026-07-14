@@ -479,6 +479,41 @@ def load_skill(skill_name):
     }, ensure_ascii=False))
 
 
+def get_loaded_skills():
+    """扫描 _history 中所有 loadSkill tool result，返回已成功 load 的 skill 名列表。
+
+    供 C# before-exec 钩子查询。loadSkill 的 tool result content 形如
+    {"ok": true, "skill": "editor-ui", "content": "..."}；execPython 的 tool result
+    无 "skill" 字段，故按 "ok": true + "skill" 键过滤。
+    """
+    loaded = []
+    seen = set()
+    for msg in _history:
+        if msg.get("role") != "tool":
+            continue
+        content = msg.get("content", "")
+        if not content:
+            continue
+        try:
+            data = json.loads(content) if isinstance(content, str) else content
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if data.get("ok") is True and "skill" in data:
+            name = data["skill"]
+            if name not in seen:
+                seen.add(name)
+                loaded.append(name)
+    print(json.dumps({"ok": True, "skills": loaded}, ensure_ascii=False))
+
+
+def append_user_message(text):
+    """向 _history 追加 role: user 消息（before-exec 提醒等 Runner 注入用，不含图片）。"""
+    _history.append({"role": "user", "content": text})
+    print(json.dumps({"ok": True}, ensure_ascii=False))
+
+
 def finalize_error(message):
     """不可恢复失败：回滚本轮（仅硬 max_steps 等兜底路径）。"""
     _rollback_turn()

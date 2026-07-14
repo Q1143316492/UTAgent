@@ -733,6 +733,10 @@ namespace UTAgent.Editor
                     Debug.LogWarning("[UTAgentRunner] execPython 缺少 code 参数");
                     continue;
                 }
+                if (!BeforeExecCheck(turn, code))
+                {
+                    continue;
+                }
                 PushProgress(turn, "tool_call", code);
                 PushProgress(turn, "status", $"执行 execPython（第 {turn.StepCount} 步）…");
                 string execResult;
