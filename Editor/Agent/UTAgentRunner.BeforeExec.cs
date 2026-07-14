@@ -24,6 +24,12 @@ namespace UTAgent.Editor
         private static readonly Regex sUiNamePrefix = new Regex(@"\b(Btn|Txt|Grp|Input)[A-Z]", RegexOptions.Compiled);
         // 排查域信号
         private static readonly Regex sDescribeGo = new Regex(@"describe_go", RegexOptions.Compiled);
+        // 重型全量反射黑名单：GetComponents(typeof(Component)) / GetComponents(CS.UnityEngine.Component) 及 InParent/InChildren 变体（不拦指定类型如 GetComponents(Image)）
+        private static readonly Regex sHeavyReflection = new Regex(
+            @"GetComponents(?:InParent|InChildren)?\(\s*(?:typeof\s*\(\s*Component\s*\)|(?:[A-Za-z_][A-Za-z0-9_.]*\.)?Component\s*)(?:,[^)]*)?\)",
+            RegexOptions.Compiled);
+        // 单步代码体积上限（防 ReAct 雪球长脚本）
+        private const int kCodeSizeLimit = 4000;
 
         /// <summary>
         /// exec 前置域校验：UI 域 exec 未 load 对应 skill 时拦截，注入 user 提醒。
@@ -34,6 +40,23 @@ namespace UTAgent.Editor
             if (string.IsNullOrEmpty(code))
             {
                 return true;
+            }
+
+            // 体积守卫：单步过长（防 ReAct 雪球长脚本），在域判定之前
+            int n = code.Length;
+            if (n > kCodeSizeLimit)
+            {
+                InjectReminder(turn, $"单步代码过长（{n} chars > {kCodeSizeLimit}），拆成小步或用原语（add_to_layout / add_free_child）。");
+                LogBeforeExec(turn, "code-too-long", $"{n} chars", "inject reminder");
+                return false;
+            }
+
+            // 重型全量反射守卫：禁止 GetComponents(typeof(Component)) 等全量反射（易致 Unity 卡死/闪退）
+            if (sHeavyReflection.IsMatch(code))
+            {
+                InjectReminder(turn, "禁止全量反射 GetComponents(typeof(Component))，用 describe_go 或指定具体类型（如 GetComponents(Image)）。");
+                LogBeforeExec(turn, "heavy-reflection", "-", "inject reminder");
+                return false;
             }
 
             // 排查域优先：describe_go 要求 editor-ui-debug
@@ -124,6 +147,14 @@ namespace UTAgent.Editor
         private void InjectSkillReminder(TurnState turn, string skillName)
         {
             string reminder = $"检测到 UI 域操作，请先 loadSkill(\"{skillName}\") 再执行相关代码。";
+            InjectReminder(turn, reminder);
+        }
+
+        /// <summary>
+        /// 向 history 注入 role: user 提醒并推 observation 进度事件（通用，供体积/反射守卫复用）。
+        /// </summary>
+        private void InjectReminder(TurnState turn, string reminder)
+        {
             PushProgress(turn, "observation", $"⚠ {reminder}");
             try
             {

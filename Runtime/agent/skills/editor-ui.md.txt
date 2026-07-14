@@ -28,9 +28,9 @@ Surface / TextPrimary / Accent / Neutral；≥3 档；禁止全同色；`print` 
 
 创建→本 skill；排查→`editor-ui-debug`。多字段表单组合→doc 15 §配方组合。
 
-## create_*
+## 创建 golden-path
 
-`loadSkill` 后复制下方代码块到 `execPython`，**只改参数区**。
+`loadSkill` 后复制下方代码块到 `execPython`，**只改参数区**。4 个原语：`create_tmp_button` / `create_layout_panel`（单层新建）· `add_to_layout` / `add_free_child`（多层挂子）。
 
 ### #1 `create_tmp_button`
 
@@ -148,3 +148,87 @@ feature = "Demo"
 title_text = "Demo Panel"
 print(json.dumps(create_layout_panel(feature, title_text), ensure_ascii=False))
 ```
+
+### #3 `add_to_layout`
+
+挂**已存在**的 child 到 parent（须含 `LayoutGroup`）下。**不碰 child 的 anchor/sizeDelta**——LayoutGroup 自动管；要控尺寸传 `preferred_w/h`（设 `LayoutElement`）。先建后挂。
+
+```python
+import json
+from unity_bind import CS
+
+def add_to_layout(parent_name, child_name, preferred_w=None, preferred_h=None):
+    parent = CS.UnityEngine.GameObject.Find(parent_name)
+    if parent is None:
+        raise RuntimeError(f"parent not found: {parent_name}")
+    child = CS.UnityEngine.GameObject.Find(child_name)
+    if child is None:
+        raise RuntimeError(f"child not found: {child_name}")
+    child.transform.SetParent(parent.transform, False)
+    if preferred_w is not None or preferred_h is not None:
+        le = child.GetComponent(CS.UnityEngine.UI.LayoutElement)
+        if le is None:
+            le = child.AddComponent(CS.UnityEngine.UI.LayoutElement)
+        if preferred_w is not None:
+            le.preferredWidth = preferred_w
+        if preferred_h is not None:
+            le.preferredHeight = preferred_h
+    return {
+        "parent": parent_name,
+        "child": child_name,
+        "has_layout_element": child.GetComponent(CS.UnityEngine.UI.LayoutElement) is not None,
+    }
+
+parent_name = "GrpBody"
+child_name = "TxtTitle"
+print(json.dumps(add_to_layout(parent_name, child_name), ensure_ascii=False))
+```
+
+### #4 `add_free_child`
+
+自由定位**已存在**的 child（不参与 `LayoutGroup`）。用于角落按钮、悬浮角标、装饰。先建后挂。
+
+```python
+import json
+from unity_bind import CS
+
+def add_free_child(parent_name, child_name, anchor_min, anchor_max, offset_min=(0,0), offset_max=(0,0)):
+    parent = CS.UnityEngine.GameObject.Find(parent_name)
+    if parent is None:
+        raise RuntimeError(f"parent not found: {parent_name}")
+    child = CS.UnityEngine.GameObject.Find(child_name)
+    if child is None:
+        raise RuntimeError(f"child not found: {child_name}")
+    child.transform.SetParent(parent.transform, False)
+    rt = child.GetComponent(CS.UnityEngine.RectTransform)
+    rt.anchorMin = CS.UnityEngine.Vector2(*anchor_min)
+    rt.anchorMax = CS.UnityEngine.Vector2(*anchor_max)
+    rt.offsetMin = CS.UnityEngine.Vector2(*offset_min)
+    rt.offsetMax = CS.UnityEngine.Vector2(*offset_max)
+    return {
+        "parent": parent_name,
+        "child": child_name,
+        "anchor_min": list(anchor_min),
+        "anchor_max": list(anchor_max),
+    }
+
+parent_name = "Canvas"
+child_name = "BtnExit"
+anchor_min = (1, 1)
+anchor_max = (1, 1)
+offset_min = (-120, -48)
+offset_max = (0, 0)
+print(json.dumps(add_free_child(parent_name, child_name, anchor_min, anchor_max, offset_min, offset_max), ensure_ascii=False))
+```
+
+## 布局模式选择
+
+- **多元素自动排列**（按钮行、表单列、设置项列表）→ 建 `LayoutGroup` 容器（raw `AddComponent(VerticalLayoutGroup/HorizontalLayoutGroup)` + `spacing`/`padding`）+ `add_to_layout` 挂子
+- **单元素/角落/悬浮**（退出按钮、角标、装饰）→ `add_free_child` 自由定位，**不建容器**
+- **LayoutGroup 容器内禁止手动设子元素 `anchorMin/anchorMax/sizeDelta`**——LayoutGroup 自动管；要控尺寸用 `add_to_layout` 的 `preferred_w/h`
+
+## 改已有 UI
+
+- 改已有 `Wnd*` **禁止** `prepare_scene_object(Wnd*)` 删根重做——丢手动微调、删错对象、步数翻倍
+- 先 `unity.find_objects(name)` 确认存在（支持 inactive），再单点操作：`GetComponent` 改属性 / `add_to_layout` 加节点 / `unity.destroy_object(name)` 删单点
+- `prepare_scene_object` 仅用于**新建原子控件**（`Btn*`/`Txt*` 等单元素）的幂等
