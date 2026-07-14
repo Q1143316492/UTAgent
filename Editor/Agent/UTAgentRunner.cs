@@ -334,7 +334,7 @@ namespace UTAgent.Editor
             else
             {
                 body = $"{{\"model\":{JsonStr(turn.Model)},\"messages\":{messagesArray}," +
-                    $"\"tools\":{AgentToolSchema},\"stream\":true,\"tool_choice\":\"auto\"{deepSeekExtras}}}";
+                    $"\"tools\":{BuildToolSchema()},\"stream\":true,\"tool_choice\":\"auto\"{deepSeekExtras}}}";
             }
             turn.RequestBody = body;
 

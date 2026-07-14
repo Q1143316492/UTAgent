@@ -1,82 +1,4 @@
----
-name: editor-ui
-description: "Editor 拼/改 Canvas UI：命名、布局、配色、预制体、create_* 模板。"
----
-
-## 何时用
-
-Editor 拼/改 Canvas UI、布局、预制体。
-
-## 工作流
-
-定 `Wnd{Feature}` → loadSkill（已加载跳过）→ 选 L1–L5 → 配色 → 单步 execPython → `find_objects` 验收。
-
-## 命名 v2
-
-`Wnd*` / `Btn*` / `Txt*` / `Grp*` / `Input*`；按钮文案 `Btn*/TxtLabel`。  
-**禁止** `*Go`、裸 `Button`、`Test*`。预制体：`Assets/Prefabs/UI/Wnd{Feature}/Wnd{Feature}.prefab`
-
-## 布局
-
-L1 居中卡片（默认）· L2 顶栏+内容 · L3 底栏按钮行 · L4 表单单列 · L5 工具条。`spacing=16` `padding=24`。双按钮用 L1+L3。
-
-## 配色
-
-Surface / TextPrimary / Accent / Neutral；≥3 档；禁止全同色；`print` color 自查。
-
-## 分工
-
-创建→本 skill；排查→`editor-ui-debug`。多字段表单组合→doc 15 §配方组合。
-
-## create_*
-
-`loadSkill` 后复制下方代码块到 `execPython`，**只改参数区**。
-
-### #1 `create_tmp_button`
-
-```python
-import json
-import unity
-from unity_bind import CS
-
-def create_tmp_button(purpose, label_text):
-    btn_name = f"Btn{purpose}"
-    unity.prepare_scene_object(btn_name)
-    canvas = CS.UnityEngine.GameObject.Find("Canvas")
-    if canvas is None:
-        raise RuntimeError("Canvas not found")
-    btn = CS.UnityEngine.GameObject(btn_name)
-    btn.transform.SetParent(canvas.transform, False)
-    btn.AddComponent(CS.UnityEngine.UI.Image).color = CS.UnityEngine.Color(0.23, 0.51, 0.96, 1)
-    btn.AddComponent(CS.UnityEngine.UI.Button)
-    btn.GetComponent(CS.UnityEngine.RectTransform).sizeDelta = CS.UnityEngine.Vector2(160, 48)
-    label = CS.UnityEngine.GameObject("TxtLabel")
-    label.transform.SetParent(btn.transform, False)
-    lbl_rt = label.AddComponent(CS.UnityEngine.RectTransform)
-    lbl_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
-    lbl_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
-    lbl_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
-    lbl_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
-    tmp = label.AddComponent(CS.TMPro.TextMeshProUGUI)
-    tmp.text = label_text
-    tmp.fontSize = 18
-    tmp.color = CS.UnityEngine.Color(1, 1, 1, 1)
-    tmp.alignment = CS.TMPro.TextAlignmentOptions.Center
-    return {
-        "btn_name": btn_name,
-        "has_button": btn.GetComponent(CS.UnityEngine.UI.Button) is not None,
-        "has_tmp_on_label": label.GetComponent(CS.TMPro.TextMeshProUGUI) is not None,
-        "tmp_text": tmp.text,
-    }
-
-purpose = "Start"
-label_text = "Start"
-print(json.dumps(create_tmp_button(purpose, label_text), ensure_ascii=False))
-```
-
-### #2 `create_layout_panel`
-
-```python
+# 与 editor-ui.md.txt create_* 代码块逐字同步；改模板先改 skill。
 import json
 import unity
 from unity_bind import CS
@@ -147,4 +69,3 @@ def create_layout_panel(feature, title_text):
 feature = "Demo"
 title_text = "Demo Panel"
 print(json.dumps(create_layout_panel(feature, title_text), ensure_ascii=False))
-```

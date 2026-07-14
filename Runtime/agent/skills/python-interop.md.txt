@@ -1,4 +1,4 @@
-﻿---
+---
 name: python-interop
 description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_bind.CS），Edit Mode 安全，观察回灌，禁止无效探索。"
 ---
@@ -63,6 +63,7 @@ Editor UI 创建/排查时 **优先遵守** 下列规则（硬验收也覆盖这
 | `SetActive` 后等 `Awake`/`Start` | 新建 UI 以为逻辑已跑 | Edit Mode **不调用** Awake/Start；手动设字段或调初始化 |
 | 第二个 Canvas | 创建 UI 根 | 场景已有 `Canvas` 时 **复用**，勿再 `new GameObject("Canvas")` |
 | Image + TMP 同 GO | 按钮结构 | 根 **Image+Button**，子 `TxtLabel` 挂 **TMP**（互斥） |
+| `AddComponent(RectTransform)` 返回 None | UI 子节点拉满父级 | 先 `AddComponent(Image/TMP)` 再 **`GetComponent(RectTransform)`** 设 anchor；**禁止**对已有 `Transform` 的 GO `AddComponent(RectTransform)` |
 
 **创建前**：`unity.prepare_scene_object(目标根名)`。**失败修补**：读 tool result 的 `recommended_action`；`patch_existing_only` 时禁止整段重建。
 

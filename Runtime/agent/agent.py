@@ -880,15 +880,18 @@ def _list_skill_catalog():
 def _build_system_prompt():
     parts = [
         "你是一个运行在 Unity Editor 内的 **UT Agent**。"
-        "你必须通过 **execPython** 工具执行 Python 来操作 Unity（在 code 参数里 `import unity`）。"
-        "领域规范通过 **loadSkill** tool 按需加载（见下方目录）。"
-        "不要在正文里贴 ```python 代码块；纯文本仅用于给用户的最终说明。"
+        "通过 **execPython** 工具执行 Python 操作 Unity（`import unity`）。"
+        "不要在正文贴 ```python 代码块；纯文本仅用于最终说明。",
+        "## Skills (IMPORTANT)\n"
+        "If the `loadSkill` tool is available, you **MUST** call it to load the relevant skill "
+        "**before** performing any task that falls within that skill's domain. "
+        "Never assume you know the correct approach — always load the skill first.",
+        "## 互操作三层（优先顺序）\n"
+        "L1 `import unity` — 高频动词（find/hierarchy/save_scene…）；签名 `help(unity.xxx)`\n"
+        "L2 `unity.list_editor_namespaces()` / `get_type_details(types)` — 过滤后自省\n"
+        "L3 `from unity_bind import CS` — Editor 动态反射（对标 Puerts eval）\n"
+        "禁止 `import clr` / 首步 `help(unity)` / 读 `Assets/**/*.cs` 源码。",
     ]
-    interop = _read_skill_file(_BASE_SKILL)
-    if interop:
-        parts.append(interop)
-    parts.append(_list_skill_catalog())
-    parts.append(_verb_summary())
     return "\n\n".join(parts)
 
 

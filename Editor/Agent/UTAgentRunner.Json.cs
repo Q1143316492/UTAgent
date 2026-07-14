@@ -18,20 +18,115 @@ namespace UTAgent.Editor
             public readonly StringBuilder Arguments = new StringBuilder();
         }
 
-        private const string AgentToolSchema =
-            "[{\"type\":\"function\",\"function\":{" +
-            "\"name\":\"execPython\"," +
-            "\"description\":\"在 Unity Editor 内执行 Python。code 为完整脚本，可 import unity。示例：import unity\\nunity.get_hierarchy()\"," +
-            "\"parameters\":{\"type\":\"object\",\"properties\":{" +
-            "\"code\":{\"type\":\"string\",\"description\":\"Python 源码\"}," +
-            "\"timeout\":{\"type\":\"number\",\"description\":\"秒，默认 30\"}" +
-            "},\"required\":[\"code\"]}}}," +
-            "{\"type\":\"function\",\"function\":{" +
-            "\"name\":\"loadSkill\"," +
-            "\"description\":\"按需加载 skills/*.md.txt 全文。Editor 拼/改 Canvas UI、预制体、布局前须先 loadSkill(\\\"editor-ui\\\")。\"," +
-            "\"parameters\":{\"type\":\"object\",\"properties\":{" +
-            "\"name\":{\"type\":\"string\",\"description\":\"skill 文件名，如 editor-ui\"}" +
-            "},\"required\":[\"name\"]}}}]";
+        /// <summary>
+        /// 动态构造 OpenAI tools schema：loadSkill description 含 Available Skills + MUST（对标 Puerts createSkillTools）。
+        /// </summary>
+        private static string BuildToolSchema()
+        {
+            string loadSkillDesc = BuildLoadSkillDescription();
+            var sb = new StringBuilder();
+            sb.Append("[{\"type\":\"function\",\"function\":{");
+            sb.Append("\"name\":\"execPython\",");
+            sb.Append("\"description\":").Append(JsonStr("在 Unity Editor 内执行 Python。code 为完整脚本，可 import unity。示例：import unity\nunity.get_hierarchy()")).Append(",");
+            sb.Append("\"parameters\":{\"type\":\"object\",\"properties\":{");
+            sb.Append("\"code\":{\"type\":\"string\",\"description\":\"Python 源码\"},");
+            sb.Append("\"timeout\":{\"type\":\"number\",\"description\":\"秒，默认 30\"}");
+            sb.Append("},\"required\":[\"code\"]}}},");
+
+            sb.Append("{\"type\":\"function\",\"function\":{");
+            sb.Append("\"name\":\"loadSkill\",");
+            sb.Append("\"description\":").Append(JsonStr(loadSkillDesc)).Append(",");
+            sb.Append("\"parameters\":{\"type\":\"object\",\"properties\":{");
+            sb.Append("\"name\":{\"type\":\"string\",\"description\":\"skill 文件名，如 editor-ui\"}");
+            sb.Append("},\"required\":[\"name\"]}}}]");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 构造 loadSkill tool description：MUST 句 + Available Skills 动态列表（读 skills/*.md.txt frontmatter）。
+        /// 对标 Puerts main.mjs createSkillTools。
+        /// </summary>
+        private static string BuildLoadSkillDescription()
+        {
+            var sb = new StringBuilder();
+            sb.Append("Load a specialized skill that provides domain-specific instructions and workflows.\n\n");
+            sb.Append("**IMPORTANT**: You MUST call this tool BEFORE performing any task that involves a domain listed below. ");
+            sb.Append("Do NOT rely on your own knowledge — always load the skill first.\n\n");
+            sb.Append("## Available Skills\n");
+            sb.Append(BuildSkillListMarkdown());
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// 扫描 skills 目录，从 frontmatter 解析 name/description，生成 markdown 列表。
+        /// </summary>
+        private static string BuildSkillListMarkdown()
+        {
+            string skillDir = System.IO.Path.Combine(
+                UnityEngine.Application.dataPath, "UTAgent/Runtime/agent/skills");
+            if (!System.IO.Directory.Exists(skillDir))
+            {
+                return "- (none)\n";
+            }
+
+            var entries = new List<string>();
+            string[] files = System.IO.Directory.GetFiles(skillDir, "*.md.txt");
+            System.Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+            foreach (string file in files)
+            {
+                string skillId = System.IO.Path.GetFileNameWithoutExtension(file);
+                skillId = skillId.Substring(0, skillId.Length - 3); // 去掉 .md
+                string content = File.ReadAllText(file);
+                string fmName, fmDesc;
+                ParseSkillFrontmatter(content, out fmName, out fmDesc);
+                string display = string.IsNullOrEmpty(fmName) ? skillId : fmName;
+                if (!string.IsNullOrEmpty(fmDesc))
+                {
+                    entries.Add($"- `{display}` — {fmDesc}");
+                }
+                else
+                {
+                    entries.Add($"- `{display}`");
+                }
+            }
+
+            if (entries.Count == 0)
+            {
+                return "- (none)\n";
+            }
+            return string.Join("\n", entries) + "\n";
+        }
+
+        /// <summary>
+        /// 从 skill 文件 YAML frontmatter 解析 name 与 description（与 agent.py _parse_skill_frontmatter 同格式）。
+        /// </summary>
+        private static void ParseSkillFrontmatter(string content, out string name, out string description)
+        {
+            name = "";
+            description = "";
+            if (string.IsNullOrEmpty(content) || !content.StartsWith("---"))
+            {
+                return;
+            }
+            int end = content.IndexOf("---", 3, StringComparison.Ordinal);
+            if (end < 0)
+            {
+                return;
+            }
+            string block = content.Substring(3, end - 3);
+            foreach (string line in block.Split('\n'))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.StartsWith("name:"))
+                {
+                    name = trimmed.Substring(5).Trim().Trim('"').Trim('\'');
+                }
+                else if (trimmed.StartsWith("description:"))
+                {
+                    description = trimmed.Substring(12).Trim().Trim('"').Trim('\'');
+                }
+            }
+        }
 
         private static string ExtractValue(string json)
         {
