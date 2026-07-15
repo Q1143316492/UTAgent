@@ -27,3 +27,10 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 ## Cursor Skill
 
 复制 `cursor-skills/utagent-unity-verify/` 到项目 `.cursor/skills/`。
+
+## Docs / Benchmark
+
+- `Docs/ui-assembly-benchmark.md` — UI 拼装验收基准（L0/L1/L2 用例表 + 结果列，唯一真源）
+- `Tools/ui-benchmark/` — benchmark 脚本（`golden_path_*.py` L1、`parse_agent_log.py` log 解析、`run_benchmark.ps1` 一键回归）
+
+改 UI 相关代码后，跑 `Tools/ui-benchmark/run_benchmark.ps1` 回归 UI 拼装能力。
