@@ -271,7 +271,7 @@ def get_messages_json():
 
 
 def inject_max_steps_message():
-    """达 maxSteps 时注入收尾指导 user 消息（puerts MAX_STEPS_MESSAGE 等价）。"""
+    """达 maxSteps 时注入收尾指导 user 消息。"""
     _history.append({"role": "user", "content": MAX_STEPS_MESSAGE})
     print(json.dumps({"ok": True}, ensure_ascii=False))
 
@@ -536,7 +536,7 @@ def _reset_exec_globals():
 
 
 def _seed_exec_globals(ns):
-    """预注入 builtins 层模块（对标 Puerts eval 环境注入）。"""
+    """预注入 builtins 层模块。"""
     exec("import unity\nfrom unity_bind import CS\n", ns)
 
 
@@ -924,7 +924,7 @@ def _build_system_prompt():
         "## 互操作三层（优先顺序）\n"
         "L1 `import unity` — 高频动词（find/hierarchy/save_scene…）；签名 `help(unity.xxx)`\n"
         "L2 `unity.list_editor_namespaces()` / `get_type_details(types)` — 过滤后自省\n"
-        "L3 `from unity_bind import CS` — Editor 动态反射（对标 Puerts eval）\n"
+        "L3 `from unity_bind import CS` — Editor 动态反射\n"
         "禁止 `import clr` / 首步 `help(unity)` / 读 `Assets/**/*.cs` 源码。",
     ]
     return "\n\n".join(parts)
@@ -939,7 +939,7 @@ def _verb_summary():
         "## 互操作三层（优先顺序）\n"
         "L1 `import unity` — 动词：find_object, get_hierarchy, capture_scene_view, scene_view_*, save_scene, …\n"
         "L2 `unity.list_editor_namespaces()` / `get_type_details(types)` — 过滤后自省（禁止首步 help/dir）\n"
-        "L3 `from unity_bind import CS` — 对标 Puerts eval（Editor 对已加载程序集动态反射）\n"
+        "L3 `from unity_bind import CS` — Editor 对已加载程序集动态反射\n"
         "\n"
         "## unity 常用动词（L1 简摘）\n"
         "- unity.list_editor_namespaces() / list_types_in_namespace(ns) / get_type_details(types)\n"

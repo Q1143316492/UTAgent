@@ -76,7 +76,7 @@ print(json.dumps(describe_go(target), ensure_ascii=False))
 
 1. `utagent exec` 跑上述脚本（或 Agent `execPython` 同等代码）
 2. stdout 中 `script` 非空 → Cursor `Read` 该 `.cs` 路径
-3. 静态逻辑用 `Grep`；live 状态仍用 exec，不要混用 Puerts MCP 补 CS
+3. 静态逻辑用 `Grep`；live 状态仍用 exec，不要混用 MCP 补 CS
 
 ## 与 editor-ui 分工
 

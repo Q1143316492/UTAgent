@@ -3,19 +3,19 @@ name: python-interop
 description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_bind.CS），Edit Mode 安全，观察回灌，禁止无效探索。"
 ---
 
-## 三层决策树（对标 Puerts builtins → type-reflection → CS.*）
+## 三层决策树
 
 ```
 用户任务
   → execPython（持久 ScriptEnv 命名空间，预置 unity + CS）
       L1: import unity          — 高频动词（截图、层级、Scene View…）
       L2: unity.list_editor_namespaces / get_type_details — 发现 API（已过滤）
-      L3: from unity_bind import CS — Editor 开放动态 CLR（对标 Puerts eval）
+      L3: from unity_bind import CS — Editor 开放动态 CLR
 ```
 
 **禁止**：首步 `help(unity)` / `dir(unity)` / 无过滤 `list_namespaces()` / 读 `Assets/**/*.cs` / `import clr`。
 
-**是否新增 L1 动词**：须对照 Puerts `builtins` / 现有 `unity` 动词清单再立项，本模块不擅自扩展。
+**是否新增 L1 动词**：须对照现有 `unity` 动词清单再立项，本模块不擅自扩展。
 
 ## 观察回灌（流程关键）
 
@@ -69,7 +69,7 @@ Editor UI 创建/排查时 **优先遵守** 下列规则（硬验收也覆盖这
 
 **Graphic 互斥**：同一 GameObject 不能同时挂 `UnityEngine.UI.Image` 与 `TextMeshProUGUI`。
 
-## Edit Mode 安全替换表（对标 Puerts）
+## Edit Mode 安全替换表
 
 除非已确认 `Application.isPlaying == true`，否则用右列替代左列：
 
@@ -86,6 +86,27 @@ Editor UI 创建/排查时 **优先遵守** 下列规则（硬验收也覆盖这
 **读材质/网格属性**：只读时用 `sharedMaterial` / `sharedMesh`；勿用 `.material` / `.mesh`。**改**某对象专属材质：Play Mode 用 `.material`；Edit Mode 须显式 `Instantiate(sharedMaterial)` 再赋回 `sharedMaterial`（或接受改 shared 影响所有引用者）。UI 配色任务优先走 `editor-ui` skill，勿在 exec 里乱改 Renderer 材质。
 
 **销毁**：L1 优先 `unity.destroy_object` / `unity.prepare_scene_object` / `unity.destroy_all_objects`；L3 等价 `CS.UnityEngine.Object.DestroyImmediate(go)`。
+
+## unity 4 子模块速查
+
+`unity` 按域拆 4 子模块，按域 import 更清晰；`unity.<verb>` 顶层路径仍可用（兼容层）。
+
+| 子模块 | 核心动词 |
+|--------|----------|
+| `unity.scene_view` | `get_hierarchy` / `find_objects` / `destroy_object` / `destroy_all_objects` / `prepare_scene_object` / `create_primitive` / `save_scene` / `select_game_object` / `focus_scene_view_on` / `scene_view_zoom/pan/orbit` / `get/set_scene_view_camera` |
+| `unity.screenshot` | `capture_screenshot` / `capture_scene_view` |
+| `unity.inspect` | `list_namespaces` / `list_editor_namespaces` / `list_types_in_namespace` / `get_type_details` |
+| `unity.console` | `get_logs` / `get_log_summary` / `log` / `log_warning` / `log_error` |
+
+```python
+from unity.scene_view import get_hierarchy, prepare_scene_object, find_objects
+from unity.inspect import get_type_details
+```
+
+**Legacy deprecated**（`unity.*` shim 仍可调，指引替代）：
+- `create_cube` → `create_primitive("Cube", name, position)`
+- `find_object` → `find_objects` 或 `scene_view.get_hierarchy`
+- `get/set_position/rotation/scale` / `move_object` / `rotate_object` / `look_at` → L3 `CS.UnityEngine.Transform`
 
 ## L1 — `import unity`（动词优先）
 
@@ -108,7 +129,7 @@ L2 仍经 `UnityBindWhitelist` 过滤；**不代表** L3 exec 受同一白名单
 
 ## L3 — `from unity_bind import CS`（动词不够时）
 
-对标 Puerts `evalJsCode` 内 `CS.*`：**Editor exec 对已加载程序集动态反射**，无运行时白名单 Filter。
+**Editor exec 对已加载程序集动态反射**，无运行时白名单 Filter。
 
 - `CS.GameCore.WindowBase` 等业务类型可用（程序集已在 Unity 域）
 - `CS.UnityEditor.MonoScript` / `AssetDatabase` / `PrefabUtility` 等长尾 Editor API 可用
@@ -126,8 +147,6 @@ L2 仍经 `UnityBindWhitelist` 过滤；**不代表** L3 exec 受同一白名单
 - 查 **脚本路径 / Rect / Button 状态**：用 `loadSkill("editor-ui-debug")` 单步 golden-path，勿多步空 `get_hierarchy`
 - 不要 `import clr`；程序集预载由 `unity_bind` 内部 `ensure_clr` 完成
 - 域重载后若类型解析失败，提示用户 `utagent init` 或重开 exec 会话
-
-**不搬** Puerts TS 专用 API：`puer.$ref` / `$generic` / `$promise` / `get_Item` 大段范例。
 
 ## Play 模式 — `unity.ui.core`（仅运行时面板）
 

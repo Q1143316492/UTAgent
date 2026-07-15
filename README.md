@@ -20,9 +20,14 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 
 ```powershell
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 ping
+./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 exec --code "from unity.scene_view import get_hierarchy; print(get_hierarchy('Canvas', echo=False))"
 ```
 
 详见 `Tools/utagent-cli/README.md`。
+
+## unity 模块
+
+`unity` 按域拆 4 子模块：`unity.scene_view` / `unity.screenshot` / `unity.inspect` / `unity.console`。`unity.<verb>` 顶层路径仍可用（兼容层）。详见 `Runtime/agent/skills/python-interop.md.txt`。
 
 ## Cursor Skill
 

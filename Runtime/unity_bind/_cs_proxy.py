@@ -1,4 +1,4 @@
-"""对标 Puerts csharp.mjs：CS 命名空间动态代理（Editor exec 开放反射）。"""
+"""CS 命名空间动态代理（Editor exec 开放反射）。"""
 
 import json
 
