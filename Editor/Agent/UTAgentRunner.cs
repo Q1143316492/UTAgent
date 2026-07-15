@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 using UnityEngine.Networking;
 using Debug = UnityEngine.Debug;
@@ -140,7 +141,7 @@ namespace UTAgent.Editor.Agent
                 Progress = onProgress,
                 StepCount = 0,
                 MaxSteps = GetMaxStepsFromConfig(),
-                Logger = UTAgentSessionLogger.BeginTurn(text, UTAgentPrefs.GetAgentModel(), imagePath),
+                Logger = UTAgentSessionLogger.BeginTurn(text, UTAgentConfig.ResolveModelId(), imagePath),
             };
             mActiveTurns.Add(turn);
             if (!PrepareNextRequest(turn))
@@ -199,7 +200,7 @@ namespace UTAgent.Editor.Agent
                 StepCount = 0,
                 MaxSteps = GetMaxStepsFromConfig(),
                 Logger = UTAgentSessionLogger.BeginContinueTurn(
-                    UTAgentPrefs.GetAgentModel()),
+                    UTAgentConfig.ResolveModelId()),
             };
             mActiveTurns.Add(turn);
             if (!PrepareNextRequest(turn))
@@ -961,9 +962,9 @@ namespace UTAgent.Editor.Agent
             public int MaxSteps;
             public UTAgentSessionLogger Logger;
 
-            public string ApiKey => UTAgentPrefs.GetAgentApiKey();
-            public string BaseUrl => UTAgentPrefs.GetAgentBaseUrl();
-            public string Model => UTAgentPrefs.GetAgentModel();
+            public string ApiKey => UTAgentConfig.ResolveApiKey();
+            public string BaseUrl => UTAgentConfig.ResolveBaseUrl();
+            public string Model => UTAgentConfig.ResolveModelId();
         }
     }
 }

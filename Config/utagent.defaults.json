@@ -1,0 +1,37 @@
+{
+    "apiKeyEnvVar": "UTAGENT_API_KEY",
+    "providers": [
+        {
+            "id": "deepseek",
+            "displayName": "DeepSeek",
+            "baseUrl": "https://api.deepseek.com",
+            "models": [
+                {
+                    "id": "deepseek-v4-flash",
+                    "displayName": "V4 Flash"
+                },
+                {
+                    "id": "deepseek-v4-pro",
+                    "displayName": "V4 Pro"
+                }
+            ]
+        }
+    ],
+    "llm": {
+        "providerId": "deepseek",
+        "modelId": "deepseek-v4-flash",
+        "maxSteps": 50,
+        "baseUrlOverride": ""
+    },
+    "python": {
+        "home": "",
+        "dll": "python312.dll"
+    },
+    "bridge": {
+        "enabled": true,
+        "port": 17861
+    },
+    "log": {
+        "directory": ""
+    }
+}

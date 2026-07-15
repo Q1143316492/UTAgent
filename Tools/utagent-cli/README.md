@@ -1,14 +1,15 @@
 # UTAgent CLI
 
-通过 localhost HTTP 调用运行中的 Unity Editor（UTAgent Bridge），供 Cursor 终端自主验证 Unity 改动。
+通过 localhost HTTP 调用运行中的 Unity Editor（UTAgent Remote CLI），供 Cursor 终端自主验证 Unity 改动。
 
 CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent-cli/`。拷贝整个 `Assets/UTAgent` 到其他 Unity 项目即可使用。
 
 ## 前提
 
 - Unity Editor 已打开本项目
-- Chat 设置 → **Editor Bridge** 已启用（须手动勾选并应用）
-- 本机已安装 **Python 3**
+- `Window/UT Agent/Settings` → **③ CLI** Tab：`bridge.enabled` 为 true（**defaults 默认开启**）；首次打开 **Agent Chat** 或点「保存 CLI 设置」后监听生效
+- 环境变量 `UTAGENT_API_KEY` 已设置（`utagent chat` 需要；`exec` 不需要）
+- 本机已安装 **Python 3**（或在 Settings → ① Python 选择目录）；`utagent init` 或 Chat 发消息可拉起引擎
 
 ## 快速开始
 
@@ -38,11 +39,11 @@ CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent
 | `chat --compact` | 等待时单行刷新进度 |
 | `chat --timeout 600` | 阻塞超时秒数（默认 600） |
 
-`chat` 须在 Chat 设置保存 LLM API Key。详见 `Docs/ut-agent/14-utagent-cli.md`。
+`chat` 须设置环境变量 `UTAGENT_API_KEY`；Bridge 侧会在 turn 开始时自动配置 Agent（与 Chat 发消息相同）。详见 `Docs/ut-agent/14-utagent-cli.md`。
 
 ## 环境变量
 
-- `UTAGENT_PORT` — 覆盖默认端口 `17861`
+- `UTAGENT_PORT` — 覆盖默认端口 `17861`（与 `utagent.local.json` 中 `bridge.port` 一致）
 
 ## 退出码
 
@@ -61,6 +62,8 @@ CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 init
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 ping    # engine_available: true
 ```
+
+域重载会停止 HTTP 监听；重新打开 **Agent Chat** 或 Settings → ③ CLI 点「保存 CLI 设置」可恢复监听。
 
 ## Cursor Skill
 

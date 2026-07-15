@@ -37,10 +37,7 @@ namespace UTAgent.Editor.Agent
             EditorGUILayout.BeginVertical(GUILayout.MaxWidth(GetMessageListContentWidth()));
             if (mMessages.Count == 0)
             {
-                if (!mShowSettings)
-                {
-                    DrawWelcome();
-                }
+                DrawWelcome();
             }
             else
             {

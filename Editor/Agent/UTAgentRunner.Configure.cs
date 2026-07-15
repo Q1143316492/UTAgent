@@ -1,3 +1,4 @@
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 
 namespace UTAgent.Editor.Agent
@@ -5,44 +6,39 @@ namespace UTAgent.Editor.Agent
     public sealed partial class UTAgentRunner
     {
         /// <summary>
-        /// 从 <see cref="UTAgentPrefs"/> 读取 Agent 配置并调用 <see cref="Configure"/>（含 legacy key 迁移）。
+        /// 从 <see cref="UTAgentConfig"/> 与环境变量读取 Agent 配置并调用 <see cref="Configure"/>。
         /// </summary>
-        public string ConfigureFromPrefs()
+        public string ConfigureFromConfig()
         {
             if (!UTAgentBootstrap.IsAvailable)
             {
                 mConfigured = false;
-                return "[Runner] 引擎不可用，请先初始化";
+                return "[Runner] 引擎不可用，请先在 Settings → Python 初始化引擎";
             }
 
-            string apiKey = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentApiKeyKey,
-                UTAgentPrefs.LegacyAgentApiKeyKey);
+            string apiKey = UTAgentConfig.ResolveApiKey();
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 mConfigured = false;
-                return "[Runner] 未配置 API Key";
+                string envName = UTAgentConfig.Current.apiKeyEnvVar;
+                return $"[Runner] 未设置环境变量 {envName}";
             }
 
-            string baseUrl = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentBaseUrlKey,
-                UTAgentPrefs.LegacyAgentBaseUrlKey);
-            string model = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentModelKey,
-                UTAgentPrefs.LegacyAgentModelKey,
-                UTAgentPrefs.DefaultModel);
-            int maxSteps = UTAgentPrefs.MigrateInt(
-                UTAgentPrefs.AgentMaxStepsKey,
-                UTAgentPrefs.LegacyAgentMaxStepsKey,
-                UTAgentPrefs.DefaultMaxSteps);
+            string baseUrl = UTAgentConfig.ResolveBaseUrl();
+            string model = UTAgentConfig.ResolveModelId();
+            int maxSteps = UTAgentConfig.ResolveMaxSteps();
 
-            string logDir = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentLogDirectoryKey,
-                UTAgentPrefs.LegacyAgentLogDirectoryKey);
-            UTAgentSessionLogger.EnsureLogDirectory(
-                string.IsNullOrWhiteSpace(logDir) ? null : logDir);
+            UTAgentSessionLogger.EnsureLogDirectory(UTAgentConfig.ResolveLogDirectory());
 
             return Configure(apiKey, baseUrl, model, maxSteps);
+        }
+
+        /// <summary>
+        /// 兼容旧调用；请改用 <see cref="ConfigureFromConfig"/>。
+        /// </summary>
+        public string ConfigureFromPrefs()
+        {
+            return ConfigureFromConfig();
         }
     }
 }

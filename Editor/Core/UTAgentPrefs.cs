@@ -1,9 +1,10 @@
-﻿using UnityEditor;
+﻿using System;
+using UnityEditor;
 
 namespace UTAgent.Editor.Core
 {
     /// <summary>
-    /// UTAgent EditorPrefs 配置中心。key 字面量与重构前一致，向后兼容现有配置。
+    /// UTAgent EditorPrefs 配置中心（legacy）。新配置请使用 <see cref="Config.UTAgentConfig"/> JSON。
     /// </summary>
     public static class UTAgentPrefs
     {
@@ -34,16 +35,19 @@ namespace UTAgent.Editor.Core
         public const int DefaultMaxInputTokens = 100000;
         public const int DefaultMinKeepMessages = 20;
 
+        [Obsolete("使用 UTAgentConfig JSON")]
         public static bool GetBridgeEnabled()
         {
             return EditorPrefs.GetBool(BridgeEnabledKey, false);
         }
 
+        [Obsolete("使用 UTAgentConfig JSON")]
         public static void SetBridgeEnabled(bool enabled)
         {
             EditorPrefs.SetBool(BridgeEnabledKey, enabled);
         }
 
+        [Obsolete("使用 UTAgentConfig JSON")]
         public static int GetBridgePort()
         {
             int port = EditorPrefs.GetInt(BridgePortKey, DefaultBridgePort);
@@ -55,16 +59,19 @@ namespace UTAgent.Editor.Core
             return port;
         }
 
+        [Obsolete("使用 UTAgentConfig JSON")]
         public static void SetBridgePort(int port)
         {
             EditorPrefs.SetInt(BridgePortKey, port);
         }
 
+        [Obsolete("API Key 改由环境变量；仅 migration 读取")]
         public static string GetAgentApiKey()
         {
             return MigrateString(AgentApiKeyKey, LegacyAgentApiKeyKey);
         }
 
+        [Obsolete("API Key 改由环境变量")]
         public static void SetAgentApiKey(string value)
         {
             EditorPrefs.SetString(AgentApiKeyKey, value ?? "");

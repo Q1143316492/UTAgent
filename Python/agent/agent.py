@@ -342,7 +342,7 @@ def prepare_history_for_step(step_number, max_input_tokens, min_keep_messages):
 def build_llm_messages_json(step_number, max_input_tokens, min_keep_messages, model=""):
     """构建含 system 的完整 messages 数组。最后一行 print 为数组 JSON（供 C# 直接嵌入请求体）。
 
-    model: 当前 LLM 模型名（由 C# EditorPrefs 传入，避免 agent 模块刷新后 _model 丢失）。
+    model: 当前 LLM 模型名（由 C# 从 JSON 配置传入，避免 agent 模块刷新后 _model 丢失）。
     """
     global _model
     if isinstance(model, str) and model.strip():

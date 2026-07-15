@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UTAgent.Editor.Agent;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 using UTAgent.Editor.PythonInterop;
 
@@ -176,21 +177,12 @@ namespace UTAgent.Editor.RemoteCli
         private bool EnsureRunnerConfigured(out string error)
         {
             error = null;
-            if (!UTAgentBootstrap.IsAvailable)
+            UTAgentReadiness.Status status = UTAgentReadiness.TryEnsureChatReady(mRunner);
+            if (!status.Ready)
             {
-                error = "引擎不可用";
-                return false;
-            }
-
-            if (mRunner.IsConfigured())
-            {
-                return true;
-            }
-
-            string result = mRunner.ConfigureFromPrefs();
-            if (!mRunner.IsConfigured())
-            {
-                error = string.IsNullOrWhiteSpace(result) ? "Runner configure 失败" : result;
+                error = string.IsNullOrWhiteSpace(status.Detail)
+                    ? status.Summary
+                    : $"{status.Summary}: {status.Detail}";
                 return false;
             }
 

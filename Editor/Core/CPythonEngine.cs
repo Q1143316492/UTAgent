@@ -197,7 +197,7 @@ namespace UTAgent.Editor.Core
             {
                 throw new InvalidOperationException(
                     $"[UTAgent] 未找到 Python 安装目录。请将 CPython 3.12 拷入 {PythonHomeResolver.GetDefaultPythonHome()}，" +
-                    "或在 Chat 设置 → 高级 填写 Python 目录。");
+                    "或在 Window/UT Agent/Settings → ① Python 选择安装目录。");
             }
 
             Environment.SetEnvironmentVariable("PYTHONHOME", pythonHome);

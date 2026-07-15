@@ -8,6 +8,7 @@ using UnityEditor;
 using UnityEngine;
 using UTAgent.Editor.Agent;
 using UTAgent.Editor.PythonInterop;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 
 namespace UTAgent.Editor.RemoteCli
@@ -44,25 +45,34 @@ namespace UTAgent.Editor.RemoteCli
         {
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             EditorApplication.update += OnEditorUpdate;
-            EditorApplication.delayCall += EnsureMatchesPrefs;
         }
 
         /// <summary>
-        /// 按 EditorPrefs 同步启停；窗口打开 / 域重载后调用，无需每次手点应用。
+        /// 按 JSON 配置同步启停。仅在打开 Chat（<see cref="UTAgentConfig.PrepareForChat"/>）或 Settings 手动保存 CLI 时调用，不在 Editor 启动时自动监听。
         /// </summary>
-        public static void EnsureMatchesPrefs()
+        public static void EnsureMatchesConfig()
         {
-            if (IsEnabledPref())
+            UTAgentConfig.EnsureLoaded();
+            BridgeDto bridge = UTAgentConfig.Current.bridge;
+            if (bridge.enabled)
             {
-                if (!IsListening)
+                if (!IsListening || Port != bridge.port)
                 {
-                    Start();
+                    ApplyBridgeConfig();
                 }
             }
             else if (IsListening)
             {
                 Stop();
             }
+        }
+
+        /// <summary>
+        /// 兼容旧调用。
+        /// </summary>
+        public static void EnsureMatchesPrefs()
+        {
+            EnsureMatchesConfig();
         }
 
         /// <summary>
@@ -80,7 +90,7 @@ namespace UTAgent.Editor.RemoteCli
                 return $"运行中  127.0.0.1:{Port}";
             }
 
-            return "已启用但未监听（点「应用」或查看 Console）";
+            return "已启用，打开 Chat 或 Settings 保存后会启动";
         }
 
         public static bool HasPendingUiChanges(bool uiEnabled, int uiPort)
@@ -120,23 +130,24 @@ namespace UTAgent.Editor.RemoteCli
 
         public static bool IsEnabledPref()
         {
-            // 默认关闭：用户须在 Chat 设置里勾选并点「应用 Remote CLI」
-            return UTAgentPrefs.GetBridgeEnabled();
-        }
-
-        public static void SetEnabledPref(bool enabled)
-        {
-            UTAgentPrefs.SetBridgeEnabled(enabled);
+            UTAgentConfig.EnsureLoaded();
+            return UTAgentConfig.Current.bridge.enabled;
         }
 
         public static int GetPortPref()
         {
-            return UTAgentPrefs.GetBridgePort();
+            UTAgentConfig.EnsureLoaded();
+            return UTAgentConfig.Current.bridge.port;
         }
 
-        public static void SetPortPref(int port)
+        /// <summary>
+        /// 将当前 JSON 中的 bridge 配置写入并启停服务。
+        /// </summary>
+        public static bool ApplyBridgeConfig()
         {
-            UTAgentPrefs.SetBridgePort(port);
+            UTAgentConfig.EnsureLoaded();
+            BridgeDto bridge = UTAgentConfig.Current.bridge;
+            return ApplySettings(bridge.enabled, bridge.port);
         }
 
         /// <summary>
@@ -150,8 +161,9 @@ namespace UTAgent.Editor.RemoteCli
                 port = DefaultPort;
             }
 
-            bool prefsUnchanged = enabled == IsEnabledPref() && port == GetPortPref();
-            if (prefsUnchanged)
+            bool sameConfig = UTAgentConfig.Current.bridge.enabled == enabled
+                && UTAgentConfig.Current.bridge.port == port;
+            if (sameConfig)
             {
                 if (!enabled && !IsListening)
                 {
@@ -164,8 +176,10 @@ namespace UTAgent.Editor.RemoteCli
                 }
             }
 
-            SetEnabledPref(enabled);
-            SetPortPref(port);
+            UTAgentConfig.Current.bridge.enabled = enabled;
+            UTAgentConfig.Current.bridge.port = port;
+            UTAgentConfig.SaveLocal();
+
             Stop();
             if (enabled)
             {

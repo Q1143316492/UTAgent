@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 
 namespace UTAgent.Editor.Agent
@@ -37,13 +38,7 @@ namespace UTAgent.Editor.Agent
 
         public static string ResolveLogDirectory()
         {
-            string configured = UTAgentPrefs.GetAgentLogDirectory().Trim();
-            if (string.IsNullOrEmpty(configured))
-            {
-                return GetDefaultLogDirectory();
-            }
-
-            return Path.GetFullPath(configured);
+            return UTAgentConfig.ResolveLogDirectory();
         }
 
         public static bool EnsureLogDirectory(string directory = null)

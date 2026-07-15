@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEditor;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 
 namespace UTAgent.Editor.Agent
@@ -333,7 +334,7 @@ namespace UTAgent.Editor.Agent
 
         private static int GetMaxStepsFromConfig()
         {
-            return UTAgentPrefs.GetAgentMaxSteps();
+            return UTAgentConfig.ResolveMaxSteps();
         }
 
         private static int GetMaxInputTokensFromConfig()

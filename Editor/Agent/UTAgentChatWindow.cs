@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.Core;
 
 using UTAgent.Editor.RemoteCli;
@@ -28,15 +29,6 @@ namespace UTAgent.Editor.Agent
         private string mInput = "";
         private bool mWaiting;
         private int mProgressIndex = -1;
-
-        private bool mShowSettings;
-        private string mApiKey = "";
-        private string mBaseURL = "";
-        private string mModel = "gpt-4o-mini";
-        private int mMaxSteps = 25;
-        private string mLogDirectory = "";
-        private bool mBridgeEnabled;
-        private int mBridgePort = UTAgentEditorHttpServer.DefaultPort;
 
         private string mAttachedImagePath;
         private Texture2D mAttachedPreview;
@@ -75,9 +67,7 @@ namespace UTAgent.Editor.Agent
             mStylesInit = false;
             mMessageScroll.Reset();
             EndWaitingTurn();
-            LoadSettings();
-            UTAgentEditorHttpServer.EnsureMatchesPrefs();
-            TrySilentConfigureRunner();
+            UTAgentConfig.PrepareForChat();
             if (UTAgentBootstrap.IsAvailable)
             {
                 RefreshPythonModulesFromDisk();
@@ -106,15 +96,14 @@ namespace UTAgent.Editor.Agent
             GUILayout.Label("UT Agent", EditorStyles.boldLabel);
             string status;
             if (mWaiting) status = "● Thinking...";
-            else if (UTAgentBootstrap.IsAvailable && mRunner.IsConfigured())
+            else if (UTAgentReadiness.GetChatStatus(mRunner).Ready)
             {
                 status = "● Ready";
             }
-            else if (UTAgentBootstrap.IsAvailable)
+            else
             {
-                status = "○ 填 API 并应用设置";
+                status = "○ " + UTAgentReadiness.GetChatStatus(mRunner).Summary;
             }
-            else status = "✕ 未就绪";
             GUILayout.FlexibleSpace();
             GUILayout.Label(status, EditorStyles.miniLabel);
             if (UTAgentBootstrap.IsAvailable)
@@ -125,7 +114,9 @@ namespace UTAgent.Editor.Agent
                 }
             }
             if (GUILayout.Button("⚙", EditorStyles.toolbarButton, GUILayout.Width(28)))
-                mShowSettings = !mShowSettings;
+            {
+                OpenSettingsWindow();
+            }
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.Space(4);
         }
@@ -139,10 +130,6 @@ namespace UTAgent.Editor.Agent
                 mWasProSkin = EditorGUIUtility.isProSkin;
             }
             DrawHeader();
-            if (mShowSettings)
-            {
-                DrawSettings();
-            }
 
             DrawMessageList();
             EditorGUILayout.Space(4);
@@ -161,7 +148,7 @@ namespace UTAgent.Editor.Agent
             GUILayout.Label("UT Agent", new GUIStyle(EditorStyles.boldLabel) { fontSize = 18, alignment = TextAnchor.MiddleCenter });
             GUILayout.Label(mRunner.IsConfigured()
                     ? "输入任务，LLM 通过 execPython 操作 Unity。"
-                    : "展开 ⚙ → LLM 配置 → 保存 API Key。",
+                    : "配置好环境变量与 Python 后发消息即可，引擎会自动启动。",
                 new GUIStyle(EditorStyles.centeredGreyMiniLabel) { fontSize = 12, alignment = TextAnchor.MiddleCenter });
             GUILayout.Space(40);
         }
@@ -237,14 +224,11 @@ namespace UTAgent.Editor.Agent
             {
                 return;
             }
-            if (!UTAgentBootstrap.IsAvailable)
+            UTAgentConfig.PrepareForChat();
+            UTAgentReadiness.Status readiness = UTAgentReadiness.TryEnsureChatReady(mRunner);
+            if (!readiness.Ready)
             {
-                AddMessage("引擎因域重载失效，请重新点击初始化", false);
-                return;
-            }
-            if (!mRunner.IsConfigured())
-            {
-                AddMessage("请先在设置里填 API Key 并 Apply。", false);
+                AddMessage($"{readiness.Summary}\n{readiness.Detail}", false);
                 return;
             }
             text = text.Trim();
@@ -584,54 +568,6 @@ namespace UTAgent.Editor.Agent
             if (mAttachedPreview != null) { UnityEngine.Object.DestroyImmediate(mAttachedPreview); mAttachedPreview = null; }
         }
 
-        private void LoadSettings()
-        {
-            mApiKey = UTAgentPrefs.MigrateString(UTAgentPrefs.AgentApiKeyKey, UTAgentPrefs.LegacyAgentApiKeyKey);
-            mBaseURL = UTAgentPrefs.MigrateString(UTAgentPrefs.AgentBaseUrlKey, UTAgentPrefs.LegacyAgentBaseUrlKey);
-            mModel = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentModelKey,
-                UTAgentPrefs.LegacyAgentModelKey,
-                UTAgentPrefs.DefaultModel);
-            mMaxSteps = UTAgentPrefs.MigrateInt(
-                UTAgentPrefs.AgentMaxStepsKey,
-                UTAgentPrefs.LegacyAgentMaxStepsKey,
-                UTAgentPrefs.DefaultMaxSteps);
-            mLogDirectory = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentLogDirectoryKey,
-                UTAgentPrefs.LegacyAgentLogDirectoryKey);
-            if (string.IsNullOrWhiteSpace(mLogDirectory))
-            {
-                mLogDirectory = UTAgentSessionLogger.GetDefaultLogDirectory();
-            }
-
-            mBridgeEnabled = UTAgentPrefs.GetBridgeEnabled();
-            mBridgePort = UTAgentPrefs.GetBridgePort();
-            mPythonHome = UTAgentPrefs.GetPythonHome();
-            if (string.IsNullOrWhiteSpace(mPythonHome))
-            {
-                mPythonHome = PythonHomeResolver.GetDefaultPythonHome();
-            }
-
-            mPythonDll = UTAgentPrefs.GetPythonDll();
-        }
-
-        private void SaveSettings()
-        {
-            UTAgentPrefs.SetAgentApiKey(mApiKey);
-            UTAgentPrefs.SetAgentBaseUrl(mBaseURL);
-            UTAgentPrefs.SetAgentModel(mModel);
-            UTAgentPrefs.SetAgentMaxSteps(mMaxSteps);
-            UTAgentPrefs.SetAgentLogDirectory(PythonPathConfig.NormalizeOptionalPath(
-                mLogDirectory,
-                UTAgentSessionLogger.GetDefaultLogDirectory()));
-            UTAgentPrefs.SetPythonHome(PythonPathConfig.NormalizeOptionalPath(
-                mPythonHome,
-                PythonHomeResolver.GetDefaultPythonHome()));
-            UTAgentPrefs.SetPythonDll(mPythonDll);
-            UTAgentPrefs.SetBridgeEnabled(mBridgeEnabled);
-            UTAgentPrefs.SetBridgePort(mBridgePort);
-        }
-
         private void RefreshPythonModulesFromDisk(bool force = false)
         {
             if (!UTAgentBootstrap.IsAvailable)
@@ -646,14 +582,14 @@ namespace UTAgent.Editor.Agent
             }
 
             mRunner.InvalidateConfigured();
-            if (!string.IsNullOrWhiteSpace(mApiKey))
+            UTAgentReadiness.Status status = UTAgentReadiness.TryEnsureChatReady(mRunner);
+            if (mRunner.IsConfigured())
             {
-                string result = mRunner.ConfigureFromPrefs();
-                AddMessage($"Python 模块已重新加载；Agent 已重新配置。\n{result}", false);
+                AddMessage($"Python 模块已重新加载；Agent 已就绪。\n{status.Detail}", false);
             }
             else
             {
-                AddMessage("Python 模块已重新加载。", false);
+                AddMessage($"Python 模块已重新加载。{status.Summary}：{status.Detail}", false);
             }
         }
 
