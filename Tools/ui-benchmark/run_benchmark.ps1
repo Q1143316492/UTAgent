@@ -8,7 +8,7 @@
 param(
     [switch]$L2,
     [switch]$L1Only,
-    [string]$Cases = "C01,C02,C03,C04,C06,C07,C08,C09"
+    [string]$Cases = "C01,C02,C03,C04,C06,C07,C08,C09,C10"
 )
 
 $ErrorActionPreference = "Stop"
@@ -113,6 +113,20 @@ Add-Result -Id "E05" -Ok $true -Detail "SKIP (describe_go 无独立脚本，见 
 Add-Result -Id "E06" -Ok $true -Detail "SKIP (add_to_layout 无独立脚本，见 editor-ui-layout-primitives verification)"
 Add-Result -Id "E07" -Ok $true -Detail "SKIP (add_free_child 无独立脚本，见 editor-ui-layout-primitives verification)"
 
+# E09 convert_to_llm reminder 过滤
+$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_convert_to_llm_e09.py"))
+$j = Get-JsonLine -Text $out
+if ($j) {
+    Add-Result -Id "E09" -Ok ($j.ok -eq $true) -Detail "reminder_count=$($j.reminder_count) last=$($j.last_reminder)"
+} else { Add-Result -Id "E09" -Ok $false -Detail "parse fail" }
+
+# E10 loadSkill/emit_progress 不进 history
+$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_history_no_progress_e10.py"))
+$j = Get-JsonLine -Text $out
+if ($j) {
+    Add-Result -Id "E10" -Ok ($j.ok -eq $true) -Detail "history_after_load=$($j.history_len_after_load) status_in_history=$($j.status_in_history)"
+} else { Add-Result -Id "E10" -Ok $false -Detail "parse fail" }
+
 # ---- Step 3: L2 行为用例（可选） ----
 if ($L2 -and -not $L1Only) {
     Write-Host "[3/4] L2 行为用例 (utagent chat)..."
@@ -126,6 +140,7 @@ if ($L2 -and -not $L1Only) {
         C07 = "把 WndSettings 里的保存按钮颜色改成红色，其他不要动"
         C08 = "一次性写一个超长脚本检查 WndSettings 所有组件的所有属性"
         C09 = "用 GetComponents(CS.UnityEngine.Component) 列出 BtnSave 的所有组件"
+        C10 = "创建设置面板 WndSettings，标题设置，两个 row（音乐/音效），底部保存/取消按钮，若守卫触发请拆步"
     }
     foreach ($c in $caseList) {
         if (-not $prompts.ContainsKey($c)) { Add-Result -Id $c -Ok $false -Detail "未知用例"; continue }

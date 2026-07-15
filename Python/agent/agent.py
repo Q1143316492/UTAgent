@@ -4,7 +4,7 @@
 （见 design D5）。本模块不再做 HTTP；只暴露单步原子入口给 C#：
 
 - configure / clear_history / abort / is_configured / get_history_length
-- append_user(text, image_base64, mime)         用户消息入历史（含图片拼装）
+- append_user(text, image_base64, mime)         用户消息入历史（begin_turn，含图片拼装）
 - get_system_prompt()                            暴露 system prompt 给 C#
 - get_messages_json()                            C# 调 LLM 前取 messages
 - append_assistant_content(text)                 最终文本 assistant 消息
@@ -32,8 +32,22 @@ import traceback
 import builtins
 import copy
 
+from messages import (
+    ASSISTANT,
+    NUDGE,
+    REMINDER,
+    SCREENSHOT,
+    TOOL,
+    USER,
+    convert_to_llm,
+    convert_to_llm_with_meta,
+    history_assistant_message,
+    history_tool_message,
+    history_user_message,
+)
+
 # AGENT_API_VERSION：仅诊断用；模块刷新由 App.sync_runtime_modules（磁盘 mtime）驱动。
-AGENT_API_VERSION = 7
+AGENT_API_VERSION = 8
 
 _SCENE_OBJECT_NAME_RE = re.compile(r'GameObject\s*\(\s*["\']([^"\']+)["\']')
 
@@ -153,7 +167,8 @@ def _repair_history_tail_for_continue():
         if last.get("tool_calls"):
             _history.pop()
             return
-        _history.append({"role": "user", "content": CONTINUE_NUDGE_MESSAGE})
+        _history.append(history_user_message(
+            CONTINUE_NUDGE_MESSAGE, kind=NUDGE, ephemeral=True))
     elif role not in ("user", "tool"):
         pass
 
@@ -201,6 +216,7 @@ def _repair_tool_call_sequences(messages):
                             },
                             ensure_ascii=False,
                         ),
+                        "kind": TOOL,
                     })
             i = j
             continue
@@ -245,16 +261,16 @@ def begin_turn(text, image_base64="", mime_type=""):
     _turn_start_len = len(_history)
     _turn_system_prompt = _build_system_prompt()
     if image_base64:
-        user_msg = {
-            "role": "user",
-            "content": [
+        user_msg = history_user_message(
+            [
                 {"type": "text", "text": text},
                 {"type": "image_url",
                  "image_url": {"url": f"data:{mime_type or 'image/png'};base64,{image_base64}"}},
             ],
-        }
+            kind=USER,
+        )
     else:
-        user_msg = {"role": "user", "content": text}
+        user_msg = history_user_message(text, kind=USER)
     _history.append(user_msg)
     print(json.dumps({"ok": True}, ensure_ascii=False))
 
@@ -266,13 +282,15 @@ def get_system_prompt():
 
 
 def get_messages_json():
-    """返回 messages（不含 system，C# 自己放 system 到 index 0）。"""
-    print(json.dumps({"ok": True, "value": _history}, ensure_ascii=False))
+    """返回 messages（不含 system，经 convert_to_llm 过滤）。"""
+    messages = convert_to_llm(_history)
+    print(json.dumps({"ok": True, "value": messages}, ensure_ascii=False))
 
 
 def inject_max_steps_message():
     """达 maxSteps 时注入收尾指导 user 消息。"""
-    _history.append({"role": "user", "content": MAX_STEPS_MESSAGE})
+    _history.append(history_user_message(
+        MAX_STEPS_MESSAGE, kind=NUDGE, ephemeral=True))
     print(json.dumps({"ok": True}, ensure_ascii=False))
 
 
@@ -309,16 +327,16 @@ def process_pending_images():
             break
         stripped["_image_note"] = "Screenshot captured (image attached separately)."
         msg["content"] = json.dumps(stripped, ensure_ascii=False)
-        _history.append({
-            "role": "user",
-            "content": [
+        _history.append(history_user_message(
+            [
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:{media_type};base64,{base64}"},
                 },
                 {"type": "text", "text": SCREENSHOT_USER_PROMPT},
             ],
-        })
+            kind=SCREENSHOT,
+        ))
         injected += 1
         break
     print(json.dumps({"ok": True, "injected": injected}, ensure_ascii=False))
@@ -326,7 +344,7 @@ def process_pending_images():
 
 def prepare_history_for_step(step_number, max_input_tokens, min_keep_messages):
     """步前历史变换：裁剪旧 tool 输出、必要时 emergency trim。返回副本，不改 _history。"""
-    messages, pruned_chars, estimated, emergency_trim = _prepare_messages_copy(
+    messages, pruned_chars, estimated, emergency_trim, _ = _prepare_messages_copy(
         step_number, max_input_tokens, min_keep_messages
     )
     print(json.dumps({
@@ -349,25 +367,27 @@ def build_llm_messages_json(step_number, max_input_tokens, min_keep_messages, mo
         _model = model.strip()
     active_model = _model
 
-    messages, pruned_chars, estimated, emergency_trim = _prepare_messages_copy(
+    messages, pruned_chars, estimated, emergency_trim, filter_meta = _prepare_messages_copy(
         step_number, max_input_tokens, min_keep_messages, active_model
     )
     system_content = _turn_system_prompt if _turn_system_prompt else _build_system_prompt()
     full = [{"role": "system", "content": system_content}] + messages
     _sanitize_messages_for_llm_api(full, active_model)
-    print(json.dumps({
+    meta = {
         "ok": True,
         "pruned_chars": pruned_chars,
         "estimated_tokens": estimated,
         "emergency_trim": emergency_trim,
         "step_number": int(step_number) if step_number is not None else 0,
-    }, ensure_ascii=False))
+    }
+    meta.update(filter_meta)
+    print(json.dumps(meta, ensure_ascii=False))
     print(json.dumps(full, ensure_ascii=False))
 
 
 def append_assistant_content(text, reasoning_content=None):
     """追加纯文本 assistant 消息（最终回复）。"""
-    entry = {"role": "assistant", "content": text}
+    entry = history_assistant_message(text)
     if reasoning_content is not None:
         entry["reasoning_content"] = reasoning_content
     elif _uses_deepseek_reasoning_replay(_model):
@@ -379,11 +399,7 @@ def append_assistant_content(text, reasoning_content=None):
 def append_assistant_tool_calls(tool_calls_json, reasoning_content=None):
     """追加含 tool_calls 的 assistant 消息。tool_calls_json 为 JSON 数组字符串。"""
     tool_calls = json.loads(tool_calls_json)
-    entry = {
-        "role": "assistant",
-        "content": "",
-        "tool_calls": tool_calls,
-    }
+    entry = history_assistant_message("", tool_calls=tool_calls)
     if reasoning_content is not None:
         entry["reasoning_content"] = reasoning_content
     elif _uses_deepseek_reasoning_replay(_model):
@@ -395,11 +411,7 @@ def append_assistant_tool_calls(tool_calls_json, reasoning_content=None):
 
 def append_tool_result(tool_call_id, content):
     """追加 role: tool 结果消息。content 为 JSON 字符串。"""
-    _history.append({
-        "role": "tool",
-        "tool_call_id": tool_call_id,
-        "content": content,
-    })
+    _history.append(history_tool_message(tool_call_id, content))
     print(json.dumps({"ok": True}, ensure_ascii=False))
 
 
@@ -508,10 +520,21 @@ def get_loaded_skills():
     print(json.dumps({"ok": True, "skills": loaded}, ensure_ascii=False))
 
 
-def append_user_message(text):
+def append_user_message(text, kind=USER, ephemeral=False):
     """向 _history 追加 role: user 消息（before-exec 提醒等 Runner 注入用，不含图片）。"""
-    _history.append({"role": "user", "content": text})
+    if kind in (REMINDER, NUDGE):
+        ephemeral = True
+    _history.append(history_user_message(text, kind=kind, ephemeral=ephemeral))
     print(json.dumps({"ok": True}, ensure_ascii=False))
+
+
+def emit_progress(kind, text):
+    """进度事件通道：写 log 可解析行，不进 _history。
+
+    运行时进度主要由 C# PushProgress 写出；此入口供 Python 侧可观测事件占位/审计。
+    """
+    line = f"status: {kind}: {text}" if kind != "before-exec" else f"before-exec: {text}"
+    print(line, file=sys.stderr)
 
 
 def finalize_error(message):
@@ -737,7 +760,7 @@ def _prune_old_tool_outputs(messages, max_chars):
 
 
 def _prepare_messages_copy(step_number, max_input_tokens, min_keep_messages, model=""):
-    """步前历史变换副本（不改 _history）。"""
+    """步前历史变换副本（不改 _history）：先 convert_to_llm，再 token 裁剪。"""
     try:
         max_tokens = int(max_input_tokens)
     except (TypeError, ValueError):
@@ -751,7 +774,8 @@ def _prepare_messages_copy(step_number, max_input_tokens, min_keep_messages, mod
     if keep_n <= 0:
         keep_n = DEFAULT_MIN_KEEP_MESSAGES
 
-    messages = copy.deepcopy(_history)
+    messages, filter_meta = convert_to_llm_with_meta(_history)
+    messages = copy.deepcopy(messages)
     pruned_chars = 0
     estimated = _estimate_messages_tokens(messages)
     emergency_trim = False
@@ -764,7 +788,7 @@ def _prepare_messages_copy(step_number, max_input_tokens, min_keep_messages, mod
         estimated = _estimate_messages_tokens(messages)
     _repair_tool_call_sequences(messages)
     _sanitize_messages_for_llm_api(messages, model)
-    return messages, pruned_chars, estimated, emergency_trim
+    return messages, pruned_chars, estimated, emergency_trim, filter_meta
 
 
 def _sanitize_messages_for_llm_api(messages, model):
@@ -841,7 +865,7 @@ def _emergency_trim(messages, keep_n):
     start = _align_safe_trim_start(messages, len(messages) - keep_n)
     kept = messages[start:]
     messages.clear()
-    messages.append({"role": "user", "content": COMPACTED_CONTEXT_PLACEHOLDER})
+    messages.append(history_user_message(COMPACTED_CONTEXT_PLACEHOLDER, kind=USER))
     messages.extend(kept)
 
 

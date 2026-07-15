@@ -135,6 +135,13 @@ namespace UTAgent.Editor.Agent
             WriteLine(SummarizeRequestBody(requestBody));
         }
 
+        public void LogLlmPrepare(int reminderInHistory, int reminderInLlm)
+        {
+            FlushStreamBuffers();
+            WriteTimestamped(
+                $"llm-prepare reminder_in_history={reminderInHistory} reminder_in_llm={reminderInLlm}");
+        }
+
         public void LogLlmError(string detail)
         {
             FlushStreamBuffers();

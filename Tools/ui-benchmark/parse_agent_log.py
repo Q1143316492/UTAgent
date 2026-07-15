@@ -35,6 +35,10 @@ RE_STEP = re.compile(r"^--- step (\d+) ---$")
 RE_BEFORE_EXEC_DECISION = re.compile(r"^\s+([^,]+?),\s*skill=(.+?)\s*→\s*(.+?)\s*$")
 # status: loadSkill: <name> <ok|fail>
 RE_LOADSKILL_STATUS = re.compile(r"^status: loadSkill: (\S+) (ok|fail)$")
+# llm-prepare reminder_in_history=N reminder_in_llm=M
+RE_LLM_PREPARE = re.compile(
+    r"^llm-prepare reminder_in_history=(\d+) reminder_in_llm=(\d+)$"
+)
 # tool_call 后跟 loadSkill(name) 缩进行
 RE_LOADSKILL_CALL = re.compile(r"^\s+loadSkill\(([^)]+)\)\s*$")
 
@@ -48,6 +52,7 @@ BENCHMARK_ASSERTS = {
     "C07": ("颜色", None, None),
     "C08": ("超长", None, "inject reminder"),  # code-too-long
     "C09": ("GetComponents", None, "inject reminder"),  # heavy-reflection
+    "C10": ("WndSettings", None, None),  # 反复守卫后 reminder_in_llm ≤ 1
 }
 
 
@@ -59,6 +64,7 @@ def parse(log_path):
     turns = []
     loadSkill_calls = []
     before_exec_decisions = []
+    llm_prepare_stats = []
     exec_steps = 0
     step_markers = 0
     current_turn = None
@@ -131,6 +137,17 @@ def parse(log_path):
             i += 1
             continue
 
+        # llm-prepare reminder 过滤统计
+        mp = RE_LLM_PREPARE.match(rest)
+        if mp:
+            llm_prepare_stats.append({
+                "reminder_in_history": int(mp.group(1)),
+                "reminder_in_llm": int(mp.group(2)),
+                "ts": ts,
+            })
+            i += 1
+            continue
+
         # tool_call：看下一非空行判断是否 loadSkill
         if rest == "tool_call":
             j = i + 1
@@ -153,6 +170,7 @@ def parse(log_path):
         "loadSkill_calls": loadSkill_calls,
         "exec_steps": exec_steps,
         "before_exec_decisions": before_exec_decisions,
+        "llm_prepare_stats": llm_prepare_stats,
         "step_markers": step_markers,
         "parse_warnings": warnings,
     }
@@ -187,6 +205,15 @@ def run_assert(parsed, case_id):
         found = any(d["action"] == expected_action for d in parsed["before_exec_decisions"])
         detail_parts.append(f"before-exec {expected_action!r}={'found' if found else 'MISSING'}")
         ok = ok and found
+
+    if case_id == "C10":
+        stats = parsed.get("llm_prepare_stats") or []
+        if not stats:
+            detail_parts.append("llm_prepare_stats=MISSING (不可观测，跳过)")
+        else:
+            max_reminder = max(s["reminder_in_llm"] for s in stats)
+            detail_parts.append(f"max reminder_in_llm={max_reminder}")
+            ok = ok and max_reminder <= 1
 
     detail_parts.append(f"exec_steps={parsed['exec_steps']}")
     return ok, ", ".join(detail_parts)

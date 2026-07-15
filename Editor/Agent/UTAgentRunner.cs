@@ -291,7 +291,7 @@ namespace UTAgent.Editor.Agent
                 SafeExec(ModuleImport + "agent.process_pending_images()\n");
                 string prepareOutput = SafeExec(ModuleImport +
                     $"agent.build_llm_messages_json({turn.StepCount + 1}, {GetMaxInputTokensFromConfig()}, {GetMinKeepMessagesFromConfig()}, {EscapePy(turn.Model)})\n");
-                LogPrepareResult(prepareOutput);
+                LogPrepareResult(turn, prepareOutput);
                 messagesArray = ExtractLastJsonLine(prepareOutput);
                 if (string.IsNullOrWhiteSpace(messagesArray) || !messagesArray.TrimStart().StartsWith("["))
                 {
@@ -841,7 +841,7 @@ namespace UTAgent.Editor.Agent
             return true;
         }
 
-        private static void LogPrepareResult(string prepareOutput)
+        private static void LogPrepareResult(TurnState turn, string prepareOutput)
         {
             if (string.IsNullOrWhiteSpace(prepareOutput))
             {
@@ -849,6 +849,12 @@ namespace UTAgent.Editor.Agent
             }
             int pruned = ExtractInt(prepareOutput, "pruned_chars");
             bool emergency = ExtractBool(prepareOutput, "emergency_trim");
+            int reminderInHistory = ExtractInt(prepareOutput, "reminder_in_history");
+            int reminderInLlm = ExtractInt(prepareOutput, "reminder_in_llm");
+            if (reminderInHistory >= 0 && reminderInLlm >= 0)
+            {
+                turn.Logger?.LogLlmPrepare(reminderInHistory, reminderInLlm);
+            }
             if (pruned > 0 || emergency)
             {
                 int tokens = ExtractInt(prepareOutput, "estimated_tokens");

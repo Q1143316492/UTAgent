@@ -159,7 +159,7 @@ namespace UTAgent.Editor.Agent
             try
             {
                 SafeExec(ModuleImport +
-                    $"agent.append_user_message({EscapePy(reminder)})\n");
+                    $"agent.append_user_message({EscapePy(reminder)}, kind=\"reminder\", ephemeral=True)\n");
             }
             catch (Exception e)
             {
