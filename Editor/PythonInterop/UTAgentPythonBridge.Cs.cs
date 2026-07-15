@@ -55,9 +55,9 @@ namespace UTAgent.Editor.PythonInterop
             var assemblyName = type.Assembly.GetName().Name ?? string.Empty;
             var json = new StringBuilder();
             json.Append("{\"success\":true");
-            json.Append($",\"fullName\":{EscapeJson(type.FullName)}");
-            json.Append($",\"assemblyName\":{EscapeJson(assemblyName)}");
-            json.Append($",\"kind\":{EscapeJson(GetTypeKind(type))}");
+            json.Append($",\"fullName\":{BridgeJson.EscapeJson(type.FullName)}");
+            json.Append($",\"assemblyName\":{BridgeJson.EscapeJson(assemblyName)}");
+            json.Append($",\"kind\":{BridgeJson.EscapeJson(GetTypeKind(type))}");
             json.Append('}');
             var success = json.ToString();
             sCsResolveCache[fullName] = success;
@@ -110,7 +110,7 @@ namespace UTAgent.Editor.PythonInterop
                 }
             }
 
-            var sorted = names.OrderBy(n => n).Select(EscapeJson);
+            var sorted = names.OrderBy(n => n).Select(BridgeJson.EscapeJson);
             return $"[{string.Join(",", sorted)}]";
         }
 

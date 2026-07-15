@@ -17,7 +17,7 @@ $env:PYTHONIOENCODING = "utf-8"
 $Root = (Resolve-Path "$PSScriptRoot/../../../..").Path
 $Cli = Join-Path $Root "Assets/UTAgent/Tools/utagent-cli/utagent.py"
 $BenchDir = Join-Path $Root "Assets/UTAgent/Tools/ui-benchmark"
-$LogDir = Join-Path $Root "utagent/LOG"
+$LogDir = Join-Path $Root "Assets/UTAgent/LOG"
 
 function Invoke-Utagent {
     param([string[]]$CmdArgs)

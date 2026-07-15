@@ -6,6 +6,10 @@ Unity Editor 内 LLM Agent 插件（Python + `execPython` / `loadSkill`）。
 
 将本仓库放到目标 Unity 项目的 `Assets/UTAgent/`。
 
+**Python 解释器**：将 CPython 3.12（含 `python312.dll`、`Lib/`）拷入 `Assets/UTAgent/PythonHome/`（已 gitignore）。也可在 Chat 设置 → 高级 指定其他目录。
+
+会话日志默认写入 `Assets/UTAgent/LOG/`（已 gitignore）。
+
 ```bash
 git clone git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 ```
@@ -39,6 +43,8 @@ Assets/UTAgent/
 ├── Scripts/         业务 UI 面板 .py
 ├── Tools/           utagent-cli、ui-benchmark
 ├── Docs/            包内文档与基准
+├── PythonHome/      本机 CPython 嵌入（gitignore，需自行拷入）
+├── LOG/             Agent 会话日志（gitignore，运行时生成）
 └── ide-skills/      Cursor IDE skill（非 LLM loadSkill）
 ```
 

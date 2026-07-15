@@ -159,7 +159,7 @@ namespace UTAgent.Editor.PythonInterop
             }
             var destroyedName = go.name;
             UnityEngine.Object.DestroyImmediate(go);
-            return $"{{\"success\":true,\"destroyed\":{EscapeJson(destroyedName)}}}";
+            return $"{{\"success\":true,\"destroyed\":{BridgeJson.EscapeJson(destroyedName)}}}";
         }
     }
 }

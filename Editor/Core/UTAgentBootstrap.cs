@@ -43,12 +43,6 @@ namespace UTAgent.Editor.Core
             return mEngine;
         }
 
-        private const string PurgeUnityModulesScript =
-            "import sys\n" +
-            "for _k in list(sys.modules.keys()):\n" +
-            "    if _k == 'unity' or _k.startswith('unity.') or _k == 'unity_bind' or _k.startswith('unity_bind.'):\n" +
-            "        del sys.modules[_k]\n";
-
         /// <summary>
         /// 初始化 CPython 引擎。重复调用安全；每次 Play 末尾会 TryReloadApp 清 Python 实例表。
         /// </summary>
@@ -113,12 +107,12 @@ namespace UTAgent.Editor.Core
 
         private static void EnsureUnityModulePath(IPythonEngine engine)
         {
-            var pythonDir = Path.Combine(Application.dataPath, "UTAgent", "Python").Replace('\\', '/');
-            var agentDir = Path.Combine(pythonDir, "agent").Replace('\\', '/');
-            var legacyRuntimeDir = Path.Combine(Application.dataPath, "UTAgent", "Runtime").Replace('\\', '/');
+            var entries = PythonPathConfig.BuildSysPathEntries();
             try
             {
-                // agent 目录必须排在 Python 根之前：否则 import agent 会命中 Python/agent/ 空 namespace package。
+                var agentDir = entries[0];
+                var pythonDir = entries[1];
+                var legacyRuntimeDir = entries[2];
                 engine.Exec(
                     "import sys\n" +
                     $"_agent = r'{agentDir}'\n" +
@@ -139,8 +133,7 @@ namespace UTAgent.Editor.Core
 
         private static void AddPythonPath()
         {
-            var pythonDir = Path.Combine(Application.dataPath, "UTAgent", "Python");
-            var agentDir = Path.Combine(pythonDir, "agent");
+            var pythonDir = PythonPathConfig.PythonDir;
             if (!Directory.Exists(pythonDir))
             {
                 Debug.LogWarning($"[UTAgent] Python 目录不存在：{pythonDir}");
@@ -150,9 +143,8 @@ namespace UTAgent.Editor.Core
             const string Key = "PYTHONPATH";
             var existing = Environment.GetEnvironmentVariable(Key) ?? string.Empty;
             var parts = existing.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-            var legacyRuntime = Path.Combine(Application.dataPath, "UTAgent", "Runtime");
-            parts.RemoveAll(p => string.Equals(p, legacyRuntime, StringComparison.OrdinalIgnoreCase));
-            foreach (var req in new[] { agentDir, pythonDir })
+            parts.RemoveAll(p => string.Equals(p, PythonPathConfig.LegacyRuntimeDir, StringComparison.OrdinalIgnoreCase));
+            foreach (var req in PythonPathConfig.BuildProcessPathEntries())
             {
                 if (!parts.Contains(req, StringComparer.OrdinalIgnoreCase))
                 {
@@ -212,23 +204,6 @@ namespace UTAgent.Editor.Core
             }
 
             return GetEngine().Exec(code);
-        }
-
-        private static void PurgeUnityPythonModules(IPythonEngine engine)
-        {
-            if (engine == null || !engine.IsAvailable)
-            {
-                return;
-            }
-
-            try
-            {
-                engine.Exec(PurgeUnityModulesScript);
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[UTAgent] 清理 unity 模块缓存失败：{e.Message}");
-            }
         }
 
         public static void RegisterModule<T>(string name, T instance) where T : class

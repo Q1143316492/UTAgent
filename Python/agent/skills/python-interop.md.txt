@@ -17,6 +17,19 @@ description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_b
 
 **是否新增 L1 动词**：须对照现有 `unity` 动词清单再立项，本模块不擅自扩展。
 
+## UTAgent C# 目录语义（改代码时对照）
+
+| 目录 | 职责 | 何时改 |
+|------|------|--------|
+| `Editor/Agent/` | LLM Chat、Runner、会话日志 | 改编排 / UI 窗口，**不是** Unity 桥接 |
+| `Editor/PythonInterop/` | `UTAgentPythonBridge`、JSON 桥接 | 改 Python↔Unity API 实现 |
+| `Editor/RemoteCli/` | HTTP 入口、headless chat | 改 `utagent` CLI 协议 |
+| `Editor/Core/` | Bootstrap、CPython 引擎、Prefs | 改初始化 / 配置 |
+| `Runtime/Play/` | Play Mode 壳组件 | 改 Play 生命周期注入 |
+| `Python/agent/` | `agent.py`、loadSkill 全文 | 改 ReAct / skill 文件 |
+| `Python/unity/` | L1 动词 Python 薄壳 | 改 `unity.*` 包 |
+| `Scripts/` | 业务 UI 面板 `.py` | 改具体 Wnd 逻辑 |
+
 ## 观察回灌（流程关键）
 
 | 写法 | Agent tool 结果里能否看到 |

@@ -7,115 +7,135 @@ namespace UTAgent.Editor.Agent
 {
     public partial class UTAgentChatWindow
     {
-        private bool mFoldLlmSettings = true;
-        private bool mFoldBridgeSettings = true;
-        private bool mFoldLogSettings;
+        private bool mFoldAdvancedSettings;
 
-        private string mBridgeFeedback = "";
-        private double mBridgeFeedbackUntil;
+        private string mPythonHome = "";
+        private string mPythonDll = UTAgentPrefs.DefaultPythonDll;
+
+        private string mSettingsFeedback = "";
+        private MessageType mSettingsFeedbackType = MessageType.Info;
+        private double mSettingsFeedbackUntil;
 
         private void DrawSettings()
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            DrawSettingsStatusSummary();
 
-            DrawLlmSettingsSection();
-            DrawSettingsSeparator();
-            DrawBridgeSettingsSection();
-            DrawSettingsSeparator();
-            DrawLogSettingsSection();
+            mApiKey = EditorGUILayout.PasswordField("API Key", mApiKey);
+            mModel = EditorGUILayout.TextField("Model", mModel);
+            mBridgeEnabled = EditorGUILayout.Toggle("启用 Remote CLI（utagent 命令）", mBridgeEnabled);
+
+            mFoldAdvancedSettings = EditorGUILayout.Foldout(mFoldAdvancedSettings, "高级", true);
+            if (mFoldAdvancedSettings)
+            {
+                EditorGUI.indentLevel++;
+                mBaseURL = EditorGUILayout.TextField("Base URL", mBaseURL);
+                mMaxSteps = EditorGUILayout.IntSlider("Max Steps", mMaxSteps, 1, 100);
+                mPythonHome = EditorGUILayout.TextField("Python 目录", mPythonHome);
+                mPythonDll = EditorGUILayout.TextField("python*.dll", string.IsNullOrWhiteSpace(mPythonDll) ? UTAgentPrefs.DefaultPythonDll : mPythonDll);
+                mBridgePort = EditorGUILayout.IntField("Remote CLI 端口", mBridgePort);
+                if (mBridgePort < 1024 || mBridgePort > 65535)
+                {
+                    mBridgePort = UTAgentEditorHttpServer.DefaultPort;
+                }
+
+                mLogDirectory = EditorGUILayout.TextField("日志目录", mLogDirectory);
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("打开日志目录", GUILayout.Width(100)))
+                {
+                    UTAgentSessionLogger.RevealLogDirectory();
+                }
+
+                EditorGUILayout.EndHorizontal();
+                EditorGUI.indentLevel--;
+            }
+
+            if (!string.IsNullOrEmpty(mSettingsFeedback)
+                && EditorApplication.timeSinceStartup < mSettingsFeedbackUntil)
+            {
+                EditorGUILayout.HelpBox(mSettingsFeedback, mSettingsFeedbackType);
+            }
+
+            if (GUILayout.Button("保存并应用", GUILayout.Height(28)))
+            {
+                ApplyAllSettings();
+            }
 
             EditorGUILayout.EndVertical();
             EditorGUILayout.Space(4);
         }
 
-        private static void DrawSettingsSeparator()
+        private void DrawSettingsStatusSummary()
         {
-            EditorGUILayout.Space(6);
-            Rect line = GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true));
-            EditorGUI.DrawRect(line, new Color(0.5f, 0.5f, 0.5f, 0.35f));
-            EditorGUILayout.Space(6);
+            string pythonHome = PythonHomeResolver.ResolvePythonHome();
+            string pythonDisplay = PythonHomeResolver.GetDisplayPythonHome();
+            bool pythonOk = pythonHome != null;
+            bool apiOk = !string.IsNullOrWhiteSpace(mApiKey);
+            bool engineOk = UTAgentBootstrap.IsAvailable;
+            bool runnerOk = engineOk && mRunner.IsConfigured();
+            bool ready = runnerOk;
+
+            var lines = new System.Text.StringBuilder();
+            lines.AppendLine(pythonOk
+                ? $"✓ Python  {pythonHome}"
+                : $"✗ Python  未找到 — 将 CPython 拷入\n  {pythonDisplay}");
+            lines.AppendLine(apiOk ? "✓ API Key  已填写" : "✗ API Key  未填写");
+            lines.AppendLine(engineOk ? "✓ 引擎  已初始化" : "○ 引擎  未初始化");
+            lines.AppendLine(ready ? "✓ 可以对话" : "○ 还不能对话 — 填好 API Key 后点「保存并应用」");
+
+            MessageType boxType = ready ? MessageType.Info : (pythonOk ? MessageType.Warning : MessageType.Error);
+            EditorGUILayout.HelpBox(lines.ToString().TrimEnd(), boxType);
         }
 
-        private void DrawLlmSettingsSection()
+        private void ApplyAllSettings()
         {
-            mFoldLlmSettings = EditorGUILayout.Foldout(mFoldLlmSettings, "LLM 配置", true, EditorStyles.foldoutHeader);
-            if (!mFoldLlmSettings)
+            SaveSettings();
+            UTAgentEditorHttpServer.ApplySettings(mBridgeEnabled, mBridgePort);
+
+            if (!UTAgentBootstrap.IsAvailable)
             {
-                return;
+                try
+                {
+                    UTAgentBootstrap.Initialize();
+                }
+                catch (System.Exception e)
+                {
+                    ShowSettingsFeedback($"初始化失败：{e.Message}", MessageType.Error, 8);
+                    return;
+                }
             }
 
-            mApiKey = EditorGUILayout.PasswordField("API Key", mApiKey);
-            mBaseURL = EditorGUILayout.TextField("Base URL", mBaseURL);
-            mModel = EditorGUILayout.TextField("Model", mModel);
-            mMaxSteps = EditorGUILayout.IntSlider("Max Steps", mMaxSteps, 1, 100);
-            if (GUILayout.Button("保存 LLM 配置"))
-            {
-                SaveSettings();
-                ApplySettings();
-            }
-        }
+            mRunner.InvalidateConfigured();
+            string configureResult = mRunner.ConfigureFromPrefs();
+            bool runnerOk = mRunner.IsConfigured();
 
-        private void DrawBridgeSettingsSection()
-        {
-            mFoldBridgeSettings = EditorGUILayout.Foldout(mFoldBridgeSettings, "Cursor CLI 桥接", true, EditorStyles.foldoutHeader);
-            if (!mFoldBridgeSettings)
+            if (runnerOk)
             {
-                return;
-            }
-
-            mBridgeEnabled = EditorGUILayout.Toggle("启用 localhost 桥", mBridgeEnabled);
-            mBridgePort = EditorGUILayout.IntField("端口", mBridgePort);
-            if (mBridgePort < 1024 || mBridgePort > 65535)
-            {
-                mBridgePort = UTAgentEditorHttpServer.DefaultPort;
-            }
-
-            string statusText = UTAgentEditorHttpServer.GetStatusLabel();
-            EditorGUILayout.LabelField("状态", statusText);
-
-            if (UTAgentEditorHttpServer.HasPendingUiChanges(mBridgeEnabled, mBridgePort))
-            {
-                EditorGUILayout.HelpBox("有未应用的更改，请点击下方按钮保存。", MessageType.Warning);
-            }
-            else if (!string.IsNullOrEmpty(mBridgeFeedback)
-                && EditorApplication.timeSinceStartup < mBridgeFeedbackUntil)
-            {
-                EditorGUILayout.HelpBox(mBridgeFeedback, MessageType.Info);
-            }
-
-            EditorGUI.BeginDisabledGroup(!UTAgentEditorHttpServer.NeedsApply(mBridgeEnabled, mBridgePort));
-            if (GUILayout.Button("应用 Bridge 设置"))
-            {
-                bool changed = UTAgentEditorHttpServer.ApplySettings(mBridgeEnabled, mBridgePort);
-                mBridgeFeedback = changed
+                string bridgeNote = mBridgeEnabled
                     ? (UTAgentEditorHttpServer.IsListening
-                        ? "Bridge 已启动"
-                        : (mBridgeEnabled ? "Bridge 启动失败，见 Console" : "Bridge 已停止"))
-                    : "已是当前状态，无需重复应用";
-                mBridgeFeedbackUntil = EditorApplication.timeSinceStartup + 2.5;
-                Repaint();
+                        ? $"Remote CLI 127.0.0.1:{UTAgentEditorHttpServer.Port}"
+                        : "Remote CLI 启用失败，见 Console")
+                    : "Remote CLI 未启用";
+                ShowSettingsFeedback($"已保存。可以对话。\n{bridgeNote}", MessageType.Info, 5);
+            }
+            else if (string.IsNullOrWhiteSpace(mApiKey))
+            {
+                ShowSettingsFeedback("已保存，但还不能对话：请填写 API Key。", MessageType.Warning, 6);
+            }
+            else
+            {
+                ShowSettingsFeedback($"已保存，但 Agent 配置失败：\n{configureResult}", MessageType.Error, 8);
             }
 
-            EditorGUI.EndDisabledGroup();
+            Repaint();
         }
 
-        private void DrawLogSettingsSection()
+        private void ShowSettingsFeedback(string message, MessageType type, double seconds)
         {
-            mFoldLogSettings = EditorGUILayout.Foldout(mFoldLogSettings, "会话日志", true, EditorStyles.foldoutHeader);
-            if (!mFoldLogSettings)
-            {
-                return;
-            }
-
-            mLogDirectory = EditorGUILayout.TextField("日志目录", mLogDirectory);
-            string hint = string.IsNullOrWhiteSpace(mLogDirectory)
-                ? UTAgentSessionLogger.GetDefaultLogDirectory()
-                : "留空则使用默认目录";
-            EditorGUILayout.LabelField(" ", hint, EditorStyles.miniLabel);
-            if (GUILayout.Button("打开日志目录"))
-            {
-                UTAgentSessionLogger.RevealLogDirectory();
-            }
+            mSettingsFeedback = message;
+            mSettingsFeedbackType = type;
+            mSettingsFeedbackUntil = EditorApplication.timeSinceStartup + seconds;
         }
 
         private void TrySilentConfigureRunner()
@@ -135,9 +155,7 @@ namespace UTAgent.Editor.Agent
                 return;
             }
 
-            UTAgentSessionLogger.EnsureLogDirectory(
-                string.IsNullOrWhiteSpace(mLogDirectory) ? null : mLogDirectory);
-            mRunner.Configure(mApiKey, mBaseURL, mModel, mMaxSteps);
+            mRunner.ConfigureFromPrefs();
         }
     }
 }

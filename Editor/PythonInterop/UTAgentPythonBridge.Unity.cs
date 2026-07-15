@@ -50,15 +50,15 @@ namespace UTAgent.Editor.PythonInterop
                 .Select(c =>
                 {
                     var t = c.GetType();
-                    return $"{{\"shortName\":{EscapeJson(t.Name)},\"fullName\":{EscapeJson(t.FullName)}}}";
+                    return $"{{\"shortName\":{BridgeJson.EscapeJson(t.Name)},\"fullName\":{BridgeJson.EscapeJson(t.FullName)}}}";
                 })
                 .ToArray();
             bool hasChildren = transform.childCount > 0;
             bool atLimit = maxDepth > 0 && currentDepth >= maxDepth;
             var sb = new StringBuilder();
             sb.Append("{");
-            sb.Append($"\"name\":{EscapeJson(go.name)},");
-            sb.Append($"\"active\":{ToLower(go.activeSelf)},");
+            sb.Append($"\"name\":{BridgeJson.EscapeJson(go.name)},");
+            sb.Append($"\"active\":{BridgeJson.ToLower(go.activeSelf)},");
             sb.Append($"\"components\":[{string.Join(",", components)}],");
             sb.Append($"\"childCount\":{transform.childCount}");
             if (hasChildren && !atLimit)
@@ -103,61 +103,7 @@ namespace UTAgent.Editor.PythonInterop
 
         private static string Error(string message)
         {
-            return $"{{\"success\":false,\"message\":{EscapeJson(message)}}}";
-        }
-
-        private static string EscapeJson(string s)
-        {
-            if (s == null)
-            {
-                return "null";
-            }
-            var sb = new StringBuilder();
-            sb.Append('"');
-            foreach (char c in s)
-            {
-                switch (c)
-                {
-                    case '"':
-                        sb.Append("\\\"");
-                        break;
-                    case '\\':
-                        sb.Append("\\\\");
-                        break;
-                    case '\b':
-                        sb.Append("\\b");
-                        break;
-                    case '\f':
-                        sb.Append("\\f");
-                    break;
-                    case '\n':
-                        sb.Append("\\n");
-                        break;
-                    case '\r':
-                        sb.Append("\\r");
-                        break;
-                    case '\t':
-                        sb.Append("\\t");
-                        break;
-                    default:
-                        if (c < 0x20)
-                        {
-                            sb.Append($"\\u{(int)c:X4}");
-                        }
-                        else
-                        {
-                            sb.Append(c);
-                        }
-                        break;
-                }
-            }
-            sb.Append('"');
-            return sb.ToString();
-        }
-
-        private static string ToLower(bool value)
-        {
-            return value ? "true" : "false";
+            return $"{{\"success\":false,\"message\":{BridgeJson.EscapeJson(message)}}}";
         }
     }
 }

@@ -41,7 +41,7 @@ namespace UTAgent.Editor.PythonInterop
                 }
             }
             var sorted = namespaces.OrderBy(n => n).ToArray();
-            return $"{{\"namespaces\":[{string.Join(",", sorted.Select(EscapeJson))}]}}";
+            return $"{{\"namespaces\":[{string.Join(",", sorted.Select(BridgeJson.EscapeJson))}]}}";
         }
 
         /// <summary>
@@ -56,7 +56,7 @@ namespace UTAgent.Editor.PythonInterop
             }
 
             var sorted = allowed.OrderBy(n => n).ToArray();
-            return $"{{\"namespaces\":[{string.Join(",", sorted.Select(EscapeJson))}]}}";
+            return $"{{\"namespaces\":[{string.Join(",", sorted.Select(BridgeJson.EscapeJson))}]}}";
         }
 
         private static List<string> ParseNamespaceFilter(string filter)
@@ -106,7 +106,7 @@ namespace UTAgent.Editor.PythonInterop
                         if (!string.IsNullOrEmpty(type.Namespace) && nsSet.Contains(type.Namespace) && type.IsPublic)
                         {
                             string kind = GetTypeKind(type);
-                            types.Add($"{{\"name\":{EscapeJson(type.Name)},\"fullName\":{EscapeJson(type.FullName)},\"kind\":{EscapeJson(kind)}}}");
+                            types.Add($"{{\"name\":{BridgeJson.EscapeJson(type.Name)},\"fullName\":{BridgeJson.EscapeJson(type.FullName)},\"kind\":{BridgeJson.EscapeJson(kind)}}}");
                         }
                     }
                 }
@@ -133,24 +133,24 @@ namespace UTAgent.Editor.PythonInterop
                 var type = FindType(name);
                 if (type == null)
                 {
-                    typeInfos.Add($"{{\"name\":{EscapeJson(name)},\"error\":\"type not found\"}}");
+                    typeInfos.Add($"{{\"name\":{BridgeJson.EscapeJson(name)},\"error\":\"type not found\"}}");
                     continue;
                 }
                 var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                    .Select(p => EscapeJson(p.Name));
+                    .Select(p => BridgeJson.EscapeJson(p.Name));
                 var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
                     .Where(m => !m.IsSpecialName)
-                    .Select(m => EscapeJson(m.Name));
+                    .Select(m => BridgeJson.EscapeJson(m.Name));
                 var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                    .Select(f => EscapeJson(f.Name));
-                var interfaces = type.GetInterfaces().Select(i => EscapeJson(i.FullName ?? i.Name));
+                    .Select(f => BridgeJson.EscapeJson(f.Name));
+                var interfaces = type.GetInterfaces().Select(i => BridgeJson.EscapeJson(i.FullName ?? i.Name));
                 var enumValues = type.IsEnum
-                    ? Enum.GetNames(type).Select(EscapeJson)
+                    ? Enum.GetNames(type).Select(BridgeJson.EscapeJson)
                     : Array.Empty<string>();
                 typeInfos.Add(
-                    $"{{\"name\":{EscapeJson(type.Name)}," +
-                    $"\"fullName\":{EscapeJson(type.FullName)}," +
-                    $"\"baseType\":{(type.BaseType != null ? EscapeJson(type.BaseType.FullName) : "null")}," +
+                    $"{{\"name\":{BridgeJson.EscapeJson(type.Name)}," +
+                    $"\"fullName\":{BridgeJson.EscapeJson(type.FullName)}," +
+                    $"\"baseType\":{(type.BaseType != null ? BridgeJson.EscapeJson(type.BaseType.FullName) : "null")}," +
                     $"\"properties\":[{string.Join(",", props)}]," +
                     $"\"methods\":[{string.Join(",", methods)}]," +
                     $"\"fields\":[{string.Join(",", fields)}]," +
@@ -172,7 +172,7 @@ namespace UTAgent.Editor.PythonInterop
             {
                 if (logType == "all" || log.Type.ToString().ToLowerInvariant() == logType)
                 {
-                    entries.Add($"{{\"timestamp\":{log.Timestamp},\"type\":{EscapeJson(log.Type.ToString())},\"message\":{EscapeJson(log.Message)},\"stackTrace\":{EscapeJson(log.StackTrace ?? "")}}}");
+                    entries.Add($"{{\"timestamp\":{log.Timestamp},\"type\":{BridgeJson.EscapeJson(log.Type.ToString())},\"message\":{BridgeJson.EscapeJson(log.Message)},\"stackTrace\":{BridgeJson.EscapeJson(log.StackTrace ?? "")}}}");
                 }
             }
             return $"[{string.Join(",", entries)}]";

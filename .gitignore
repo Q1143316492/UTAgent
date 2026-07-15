@@ -7,3 +7,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 __pycache__.meta
+
+# 本机 CPython 嵌入与运行时日志（默认路径，见 PythonPathConfig）
+PythonHome/
+LOG/

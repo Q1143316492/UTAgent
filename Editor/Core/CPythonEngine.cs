@@ -15,9 +15,6 @@ namespace UTAgent.Editor.Core
     /// </summary>
     public sealed class CPythonEngine : IPythonEngine
     {
-        private const string PythonHome = @"C:\Users\chenweilin\AppData\Local\Programs\Python\Python312";
-        private const string PythonDll = "python312.dll";
-
         private static bool mInitialized;
         private static bool mInvalidated;
         private static readonly object mLock = new();
@@ -195,12 +192,17 @@ namespace UTAgent.Editor.Core
 
         private static void ConfigureEnvironment()
         {
-            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PYTHONHOME")))
+            string pythonHome = PythonHomeResolver.ResolvePythonHome();
+            if (string.IsNullOrEmpty(pythonHome))
             {
-                Environment.SetEnvironmentVariable("PYTHONHOME", PythonHome);
+                throw new InvalidOperationException(
+                    $"[UTAgent] 未找到 Python 安装目录。请将 CPython 3.12 拷入 {PythonHomeResolver.GetDefaultPythonHome()}，" +
+                    "或在 Chat 设置 → 高级 填写 Python 目录。");
             }
 
-            var libPath = Path.Combine(PythonHome, "Lib");
+            Environment.SetEnvironmentVariable("PYTHONHOME", pythonHome);
+
+            var libPath = Path.Combine(pythonHome, "Lib");
             var sitePath = Path.Combine(libPath, "site-packages");
             var existing = Environment.GetEnvironmentVariable("PYTHONPATH") ?? string.Empty;
             var required = new[] { libPath, sitePath };
@@ -214,11 +216,9 @@ namespace UTAgent.Editor.Core
             }
             Environment.SetEnvironmentVariable("PYTHONPATH", string.Join(";", parts));
 
-            if (string.IsNullOrEmpty(Runtime.PythonDLL))
-            {
-                Runtime.PythonDLL = Path.Combine(PythonHome, PythonDll);
-            }
-            Debug.Log($"[UTAgent] PYTHONHOME={Environment.GetEnvironmentVariable("PYTHONHOME")}");
+            string dllName = PythonHomeResolver.ResolvePythonDllFileName();
+            Runtime.PythonDLL = Path.Combine(pythonHome, dllName);
+            Debug.Log($"[UTAgent] PYTHONHOME={pythonHome}");
             Debug.Log($"[UTAgent] PYTHONPATH={Environment.GetEnvironmentVariable("PYTHONPATH")}");
             Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
         }

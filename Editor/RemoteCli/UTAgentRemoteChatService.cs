@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEditor;
@@ -9,21 +9,21 @@ using UTAgent.Editor.PythonInterop;
 namespace UTAgent.Editor.RemoteCli
 {
     /// <summary>
-    /// Bridge 侧 headless Chat：复用 <see cref="UTAgentRunner"/>，与 Chat 窗口独立会话。
+    /// RemoteCli 侧 headless Chat：复用 <see cref="UTAgentRunner"/>，与 Chat 窗口独立会话。
     /// </summary>
-    public sealed class UTAgentBridgeChatService
+    public sealed class UTAgentRemoteChatService
     {
-        private static UTAgentBridgeChatService sInstance;
+        private static UTAgentRemoteChatService sInstance;
 
         private static readonly Regex mStepRegex = new Regex(@"第 (\d+) 步", RegexOptions.Compiled);
 
         private readonly UTAgentRunner mRunner = new UTAgentRunner();
-        private readonly Dictionary<string, BridgeChatTurn> mTurns = new Dictionary<string, BridgeChatTurn>();
+        private readonly Dictionary<string, RemoteChatTurn> mTurns = new Dictionary<string, RemoteChatTurn>();
         private string mRunningTurnId;
 
-        public static UTAgentBridgeChatService Instance => sInstance ??= new UTAgentBridgeChatService();
+        public static UTAgentRemoteChatService Instance => sInstance ??= new UTAgentRemoteChatService();
 
-        private UTAgentBridgeChatService()
+        private UTAgentRemoteChatService()
         {
         }
 
@@ -34,13 +34,13 @@ namespace UTAgent.Editor.RemoteCli
                 lock (mTurns)
                 {
                     return mRunningTurnId != null
-                        && mTurns.TryGetValue(mRunningTurnId, out BridgeChatTurn t)
+                        && mTurns.TryGetValue(mRunningTurnId, out RemoteChatTurn t)
                         && t.Status == "running";
                 }
             }
         }
 
-        public bool TryStartChat(string message, out BridgeChatTurn turn, out string error, out int httpStatus)
+        public bool TryStartChat(string message, out RemoteChatTurn turn, out string error, out int httpStatus)
         {
             turn = null;
             error = null;
@@ -56,7 +56,7 @@ namespace UTAgent.Editor.RemoteCli
             lock (mTurns)
             {
                 if (mRunningTurnId != null
-                    && mTurns.TryGetValue(mRunningTurnId, out BridgeChatTurn active)
+                    && mTurns.TryGetValue(mRunningTurnId, out RemoteChatTurn active)
                     && active.Status == "running")
                 {
                     error = $"已有任务运行中（turn_id={mRunningTurnId}）";
@@ -81,7 +81,7 @@ namespace UTAgent.Editor.RemoteCli
                 return false;
             }
 
-            turn = new BridgeChatTurn
+            turn = new RemoteChatTurn
             {
                 TurnId = Guid.NewGuid().ToString("N").Substring(0, 8),
                 Status = "running",
@@ -98,7 +98,7 @@ namespace UTAgent.Editor.RemoteCli
                 mRunningTurnId = turn.TurnId;
             }
 
-            BridgeChatTurn captured = turn;
+            RemoteChatTurn captured = turn;
             mRunner.SendMessageAsync(
                 turn.Message,
                 null,
@@ -140,7 +140,7 @@ namespace UTAgent.Editor.RemoteCli
             return true;
         }
 
-        public bool TryGetTurn(string turnId, out BridgeChatTurn turn)
+        public bool TryGetTurn(string turnId, out RemoteChatTurn turn)
         {
             lock (mTurns)
             {
@@ -154,7 +154,7 @@ namespace UTAgent.Editor.RemoteCli
             }
         }
 
-        public string BuildTurnJson(BridgeChatTurn turn)
+        public string BuildTurnJson(RemoteChatTurn turn)
         {
             if (turn == null)
             {
@@ -182,33 +182,12 @@ namespace UTAgent.Editor.RemoteCli
                 return false;
             }
 
-            string apiKey = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentApiKeyKey,
-                UTAgentPrefs.LegacyAgentApiKeyKey);
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                error = "未配置 API Key，请在 UT Agent Chat 设置中保存 LLM 配置";
-                return false;
-            }
-
-            string baseUrl = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentBaseUrlKey,
-                UTAgentPrefs.LegacyAgentBaseUrlKey);
-            string model = UTAgentPrefs.MigrateString(
-                UTAgentPrefs.AgentModelKey,
-                UTAgentPrefs.LegacyAgentModelKey,
-                UTAgentPrefs.DefaultModel);
-            int maxSteps = UTAgentPrefs.MigrateInt(
-                UTAgentPrefs.AgentMaxStepsKey,
-                UTAgentPrefs.LegacyAgentMaxStepsKey,
-                UTAgentPrefs.DefaultMaxSteps);
-
             if (mRunner.IsConfigured())
             {
                 return true;
             }
 
-            string result = mRunner.Configure(apiKey, baseUrl, model, maxSteps);
+            string result = mRunner.ConfigureFromPrefs();
             if (!mRunner.IsConfigured())
             {
                 error = string.IsNullOrWhiteSpace(result) ? "Runner configure 失败" : result;
@@ -223,7 +202,7 @@ namespace UTAgent.Editor.RemoteCli
             return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         }
 
-        public sealed class BridgeChatTurn
+        public sealed class RemoteChatTurn
         {
             public string TurnId;
             public string Status;

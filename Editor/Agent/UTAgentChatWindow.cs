@@ -112,29 +112,12 @@ namespace UTAgent.Editor.Agent
             }
             else if (UTAgentBootstrap.IsAvailable)
             {
-                status = "○ 未配置 API";
+                status = "○ 填 API 并应用设置";
             }
-            else status = "✕ Offline";
+            else status = "✕ 未就绪";
             GUILayout.FlexibleSpace();
             GUILayout.Label(status, EditorStyles.miniLabel);
-            if (!UTAgentBootstrap.IsAvailable)
-            {
-                if (GUILayout.Button("初始化引擎", EditorStyles.toolbarButton, GUILayout.Width(80)))
-                {
-                    try
-                    {
-                        UTAgentBootstrap.Initialize();
-                        mRunner.InvalidateConfigured();
-                        TrySilentConfigureRunner();
-                    }
-                    catch (Exception e)
-                    {
-                        AddMessage($"[初始化失败] {e}", false);
-                    }
-                    Repaint();
-                }
-            }
-            else
+            if (UTAgentBootstrap.IsAvailable)
             {
                 if (GUILayout.Button("刷新 Python", EditorStyles.toolbarButton, GUILayout.Width(88)))
                 {
@@ -616,8 +599,20 @@ namespace UTAgent.Editor.Agent
             mLogDirectory = UTAgentPrefs.MigrateString(
                 UTAgentPrefs.AgentLogDirectoryKey,
                 UTAgentPrefs.LegacyAgentLogDirectoryKey);
+            if (string.IsNullOrWhiteSpace(mLogDirectory))
+            {
+                mLogDirectory = UTAgentSessionLogger.GetDefaultLogDirectory();
+            }
+
             mBridgeEnabled = UTAgentPrefs.GetBridgeEnabled();
             mBridgePort = UTAgentPrefs.GetBridgePort();
+            mPythonHome = UTAgentPrefs.GetPythonHome();
+            if (string.IsNullOrWhiteSpace(mPythonHome))
+            {
+                mPythonHome = PythonHomeResolver.GetDefaultPythonHome();
+            }
+
+            mPythonDll = UTAgentPrefs.GetPythonDll();
         }
 
         private void SaveSettings()
@@ -626,19 +621,15 @@ namespace UTAgent.Editor.Agent
             UTAgentPrefs.SetAgentBaseUrl(mBaseURL);
             UTAgentPrefs.SetAgentModel(mModel);
             UTAgentPrefs.SetAgentMaxSteps(mMaxSteps);
-            UTAgentPrefs.SetAgentLogDirectory(mLogDirectory ?? "");
-        }
-
-        private void ApplySettings()
-        {
-            if (!UTAgentBootstrap.IsAvailable)
-            {
-                try { UTAgentBootstrap.Initialize(); } catch (Exception e) { AddMessage($"[初始化失败] {e}", false); return; }
-            }
-            UTAgentSessionLogger.EnsureLogDirectory(
-                string.IsNullOrWhiteSpace(mLogDirectory) ? null : mLogDirectory);
-            string result = mRunner.Configure(mApiKey, mBaseURL, mModel, mMaxSteps);
-            AddMessage(result, false);
+            UTAgentPrefs.SetAgentLogDirectory(PythonPathConfig.NormalizeOptionalPath(
+                mLogDirectory,
+                UTAgentSessionLogger.GetDefaultLogDirectory()));
+            UTAgentPrefs.SetPythonHome(PythonPathConfig.NormalizeOptionalPath(
+                mPythonHome,
+                PythonHomeResolver.GetDefaultPythonHome()));
+            UTAgentPrefs.SetPythonDll(mPythonDll);
+            UTAgentPrefs.SetBridgeEnabled(mBridgeEnabled);
+            UTAgentPrefs.SetBridgePort(mBridgePort);
         }
 
         private void RefreshPythonModulesFromDisk(bool force = false)
@@ -657,7 +648,7 @@ namespace UTAgent.Editor.Agent
             mRunner.InvalidateConfigured();
             if (!string.IsNullOrWhiteSpace(mApiKey))
             {
-                string result = mRunner.Configure(mApiKey, mBaseURL, mModel, mMaxSteps);
+                string result = mRunner.ConfigureFromPrefs();
                 AddMessage($"Python 模块已重新加载；Agent 已重新配置。\n{result}", false);
             }
             else

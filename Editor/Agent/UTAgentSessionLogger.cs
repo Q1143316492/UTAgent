@@ -32,7 +32,7 @@ namespace UTAgent.Editor.Agent
 
         public static string GetDefaultLogDirectory()
         {
-            return Path.GetFullPath(Path.Combine(Application.dataPath, "..", "utagent", "LOG"));
+            return Path.GetFullPath(PythonPathConfig.DefaultLogDirectory);
         }
 
         public static string ResolveLogDirectory()
@@ -373,81 +373,13 @@ namespace UTAgent.Editor.Agent
                 return "(empty)";
             }
 
-            string code = ExtractJsonStringValue(toolCallsJson, "code");
+            string code = UTAgentJsonExtract.GetString(toolCallsJson, "code");
             if (!string.IsNullOrEmpty(code))
             {
                 return code;
             }
 
             return toolCallsJson.Trim();
-        }
-
-        private static string ExtractJsonStringValue(string json, string key)
-        {
-            string pattern = $"\"{key}\"";
-            int keyIdx = json.IndexOf(pattern, StringComparison.Ordinal);
-            if (keyIdx < 0)
-            {
-                return "";
-            }
-
-            int colon = json.IndexOf(':', keyIdx + pattern.Length);
-            if (colon < 0)
-            {
-                return "";
-            }
-
-            int i = colon + 1;
-            while (i < json.Length && char.IsWhiteSpace(json[i]))
-            {
-                i++;
-            }
-
-            if (i >= json.Length || json[i] != '"')
-            {
-                return "";
-            }
-
-            i++;
-            var sb = new StringBuilder();
-            while (i < json.Length)
-            {
-                char c = json[i++];
-                if (c == '\\' && i < json.Length)
-                {
-                    char esc = json[i++];
-                    switch (esc)
-                    {
-                        case 'n':
-                            sb.Append('\n');
-                            break;
-                        case 'r':
-                            sb.Append('\r');
-                            break;
-                        case 't':
-                            sb.Append('\t');
-                            break;
-                        case '"':
-                        case '\\':
-                            sb.Append(esc);
-                            break;
-                        default:
-                            sb.Append(esc);
-                            break;
-                    }
-
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    break;
-                }
-
-                sb.Append(c);
-            }
-
-            return sb.ToString();
         }
 
         private static string TrimForLog(string text, int maxChars)

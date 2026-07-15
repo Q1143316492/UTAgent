@@ -17,7 +17,7 @@ namespace UTAgent.Editor.RemoteCli
     /// 请求在 <see cref="EditorApplication.update"/> 主线程队列中处理。
     /// </summary>
     [InitializeOnLoad]
-    public static class UTAgentEditorHttpServer
+    public static partial class UTAgentEditorHttpServer
     {
         public const string PrefKeyEnabled = UTAgentPrefs.BridgeEnabledKey;
         public const string PrefKeyPort = UTAgentPrefs.BridgePortKey;
@@ -120,7 +120,7 @@ namespace UTAgent.Editor.RemoteCli
 
         public static bool IsEnabledPref()
         {
-            // 默认关闭：用户须在 Chat 设置里勾选并点「应用 Bridge」
+            // 默认关闭：用户须在 Chat 设置里勾选并点「应用 Remote CLI」
             return UTAgentPrefs.GetBridgeEnabled();
         }
 
@@ -202,13 +202,13 @@ namespace UTAgent.Editor.RemoteCli
                 mRunning = true;
                 int generation = ++mAcceptGeneration;
                 _ = AcceptLoopAsync(generation);
-                Debug.Log($"[UTAgent Bridge] 开始监听 http://127.0.0.1:{mPort}/");
+                Debug.Log($"[UTAgent RemoteCli] 开始监听 http://127.0.0.1:{mPort}/");
             }
             catch (Exception e)
             {
                 mRunning = false;
                 mListener = null;
-                Debug.LogWarning($"[UTAgent Bridge] 启动失败（端口 {mPort}）：{e.Message}");
+                Debug.LogWarning($"[UTAgent RemoteCli] 启动失败（端口 {mPort}）：{e.Message}");
             }
         }
 
@@ -237,7 +237,7 @@ namespace UTAgent.Editor.RemoteCli
                 while (mQueue.Count > 0)
                 {
                     var item = mQueue.Dequeue();
-                    item.CompleteUnavailable("Bridge 已停止");
+                    item.CompleteUnavailable("Remote CLI 已停止");
                 }
             }
 
@@ -270,7 +270,7 @@ namespace UTAgent.Editor.RemoteCli
                 {
                     if (mRunning)
                     {
-                        Debug.LogWarning($"[UTAgent Bridge] 接受请求失败：{e.Message}");
+                        Debug.LogWarning($"[UTAgent RemoteCli] 接受请求失败：{e.Message}");
                     }
 
                     break;
@@ -309,7 +309,7 @@ namespace UTAgent.Editor.RemoteCli
                 mRunning = false;
                 if (!mStopping)
                 {
-                    Debug.LogWarning("[UTAgent Bridge] 监听循环已退出");
+                    Debug.LogWarning("[UTAgent RemoteCli] 监听循环已退出");
                 }
             }
         }
@@ -333,7 +333,7 @@ namespace UTAgent.Editor.RemoteCli
             }
         }
 
-        private sealed class BridgeWorkItem
+        private sealed partial class BridgeWorkItem
         {
             private readonly HttpListenerContext mContext;
             private readonly string mMethod;
@@ -423,249 +423,6 @@ namespace UTAgent.Editor.RemoteCli
                 }
 
                 WriteJson(404, "{\"ok\":false,\"error\":\"unknown route\"}");
-            }
-
-            private void HandleChatPost()
-            {
-                string message = BridgeJson.Args.GetString(mBody, "message");
-                if (!UTAgentBridgeChatService.Instance.TryStartChat(
-                        message,
-                        out UTAgentBridgeChatService.BridgeChatTurn turn,
-                        out string error,
-                        out int httpStatus))
-                {
-                    WriteJson(httpStatus,
-                        "{\"ok\":false" +
-                        $",\"error\":{BridgeJson.EscapeJson(error ?? "start failed")}" +
-                        (httpStatus == 409 && UTAgentBridgeChatService.Instance.HasRunningTurn
-                            ? ",\"hint\":\"等待当前 turn 结束或使用 chat status 查询\""
-                            : string.Empty) +
-                        "}");
-                    return;
-                }
-
-                WriteJson(200,
-                    "{\"ok\":true" +
-                    $",\"turn_id\":{BridgeJson.EscapeJson(turn.TurnId)}" +
-                    ",\"status\":\"running\"}");
-            }
-
-            private void HandleChatStatus()
-            {
-                string turnId = mQuery["turn_id"] ?? string.Empty;
-                if (!UTAgentBridgeChatService.Instance.TryGetTurn(turnId, out UTAgentBridgeChatService.BridgeChatTurn turn))
-                {
-                    WriteJson(404, "{\"ok\":false,\"error\":\"turn not found\"}");
-                    return;
-                }
-
-                WriteJson(200, UTAgentBridgeChatService.Instance.BuildTurnJson(turn));
-            }
-
-            private void HandlePing()
-            {
-                string json =
-                    "{\"ok\":true" +
-                    ",\"editor_alive\":true" +
-                    $",\"engine_available\":{BridgeJson.ToLower(UTAgentBootstrap.IsAvailable)}" +
-                    $",\"invalidated\":{BridgeJson.ToLower(UTAgentBootstrap.IsInvalidated)}" +
-                    $",\"port\":{mPort}" +
-                    $",\"log_directory\":{BridgeJson.EscapeJson(UTAgentSessionLogger.ResolveLogDirectory())}" +
-                    $",\"unity_version\":{BridgeJson.EscapeJson(Application.unityVersion)}" +
-                    ",\"bridge_running\":" + BridgeJson.ToLower(IsListening) +
-                    "}";
-                if (!UTAgentBootstrap.IsAvailable && UTAgentBootstrap.IsInvalidated)
-                {
-                    json = json.TrimEnd('}') +
-                           ",\"hint\":\"引擎因域重载失效，请 POST /initialize 或运行 utagent init\"}";
-                }
-
-                WriteJson(200, json);
-            }
-
-            private void HandleInitialize()
-            {
-                try
-                {
-                    UTAgentBootstrap.Initialize();
-                    WriteJson(200,
-                        $"{{\"ok\":true,\"engine_available\":{BridgeJson.ToLower(UTAgentBootstrap.IsAvailable)}}}");
-                }
-                catch (Exception e)
-                {
-                    WriteJson(500,
-                        $"{{\"ok\":false,\"engine_available\":false,\"error\":{BridgeJson.EscapeJson(e.Message)}}}");
-                }
-            }
-
-            private void HandleExec()
-            {
-                if (!UTAgentBootstrap.IsAvailable)
-                {
-                    string hint = UTAgentBootstrap.IsInvalidated
-                        ? "引擎因域重载失效，请 POST /initialize 或运行 utagent init"
-                        : "引擎未初始化，请 POST /initialize 或运行 utagent init";
-                    WriteJson(503,
-                        "{\"ok\":false" +
-                        ",\"engine_available\":false" +
-                        $",\"invalidated\":{BridgeJson.ToLower(UTAgentBootstrap.IsInvalidated)}" +
-                        $",\"hint\":{BridgeJson.EscapeJson(hint)}" +
-                        ",\"output\":\"\",\"error\":\"\"}");
-                    return;
-                }
-
-                string code = BridgeJson.Args.GetString(mBody, "code");
-                if (string.IsNullOrWhiteSpace(code))
-                {
-                    WriteJson(400, "{\"ok\":false,\"error\":\"missing code\"}");
-                    return;
-                }
-
-                try
-                {
-                    var (output, error) = UTAgentBootstrap.Exec(code);
-                    bool hasError = !string.IsNullOrWhiteSpace(error);
-                    WriteJson(200,
-                        "{\"ok\":" + BridgeJson.ToLower(!hasError) +
-                        $",\"output\":{BridgeJson.EscapeJson(output ?? string.Empty)}" +
-                        $",\"error\":{BridgeJson.EscapeJson(error ?? string.Empty)}" +
-                        ",\"engine_available\":true}");
-                }
-                catch (Exception e)
-                {
-                    WriteJson(200,
-                        "{\"ok\":false" +
-                        ",\"output\":\"\"" +
-                        $",\"error\":{BridgeJson.EscapeJson(e.ToString())}" +
-                        ",\"engine_available\":true}");
-                }
-            }
-
-            private void HandleLogTail()
-            {
-                int n = ParseLineCount(mQuery["n"], 80);
-                var (path, lines) = ReadLatestLogTail(n);
-                var sb = new StringBuilder();
-                sb.Append("{\"ok\":true");
-                sb.Append(path == null ? ",\"path\":null" : $",\"path\":{BridgeJson.EscapeJson(path)}");
-                sb.Append(",\"lines\":[");
-                for (int i = 0; i < lines.Count; i++)
-                {
-                    if (i > 0)
-                    {
-                        sb.Append(',');
-                    }
-
-                    sb.Append(BridgeJson.EscapeJson(lines[i]));
-                }
-
-                sb.Append("]}");
-                WriteJson(200, sb.ToString());
-            }
-
-            private void HandleLogErrors()
-            {
-                int n = ParseLineCount(mQuery["n"], 200);
-                var (path, lines) = ReadLatestLogTail(n);
-                var matches = new List<string>();
-                foreach (string line in lines)
-                {
-                    if (IsErrorLine(line))
-                    {
-                        matches.Add(line);
-                    }
-                }
-
-                var sb = new StringBuilder();
-                sb.Append("{\"ok\":true");
-                sb.Append(path == null ? ",\"path\":null" : $",\"path\":{BridgeJson.EscapeJson(path)}");
-                sb.Append(",\"matches\":[");
-                for (int i = 0; i < matches.Count; i++)
-                {
-                    if (i > 0)
-                    {
-                        sb.Append(',');
-                    }
-
-                    sb.Append(BridgeJson.EscapeJson(matches[i]));
-                }
-
-                sb.Append("]}");
-                WriteJson(200, sb.ToString());
-            }
-
-            private void HandleSceneFind()
-            {
-                string name = mQuery["name"] ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(name))
-                {
-                    WriteJson(400, "{\"ok\":false,\"error\":\"missing name\"}");
-                    return;
-                }
-
-                string bridgeJson = UTAgentPythonBridge.Instance.FindObjects(name);
-                int count = 0;
-                var names = new List<string>();
-                if (bridgeJson.Contains("\"success\":true"))
-                {
-                    int countIdx = bridgeJson.IndexOf("\"count\":", StringComparison.Ordinal);
-                    if (countIdx >= 0)
-                    {
-                        int start = countIdx + 8;
-                        int end = start;
-                        while (end < bridgeJson.Length && char.IsDigit(bridgeJson[end]))
-                        {
-                            end++;
-                        }
-
-                        if (end > start && int.TryParse(bridgeJson.Substring(start, end - start), out int parsed))
-                        {
-                            count = parsed;
-                        }
-                    }
-
-                    int searchFrom = 0;
-                    while (true)
-                    {
-                        int nameKey = bridgeJson.IndexOf("\"name\":", searchFrom, StringComparison.Ordinal);
-                        if (nameKey < 0)
-                        {
-                            break;
-                        }
-
-                        int q1 = bridgeJson.IndexOf('"', nameKey + 7);
-                        if (q1 < 0)
-                        {
-                            break;
-                        }
-
-                        int q2 = bridgeJson.IndexOf('"', q1 + 1);
-                        if (q2 < 0)
-                        {
-                            break;
-                        }
-
-                        names.Add(bridgeJson.Substring(q1 + 1, q2 - q1 - 1));
-                        searchFrom = q2 + 1;
-                    }
-                }
-
-                var sb = new StringBuilder();
-                sb.Append("{\"ok\":true");
-                sb.Append($",\"count\":{count}");
-                sb.Append(",\"names\":[");
-                for (int i = 0; i < names.Count; i++)
-                {
-                    if (i > 0)
-                    {
-                        sb.Append(',');
-                    }
-
-                    sb.Append(BridgeJson.EscapeJson(names[i]));
-                }
-
-                sb.Append("]}");
-                WriteJson(200, sb.ToString());
             }
 
             private void WriteJson(int statusCode, string json)

@@ -176,7 +176,7 @@ namespace UTAgent.Editor.PythonInterop
         private static string BuildImageResponse(byte[] bytes, string source)
         {
             var base64 = Convert.ToBase64String(bytes);
-            return $"{{\"success\":true,\"message\":\"screenshot captured from {source}\",\"__image\":{{\"base64\":{EscapeJson(base64)},\"mediaType\":\"image/png\"}}}}";
+            return $"{{\"success\":true,\"message\":\"screenshot captured from {source}\",\"__image\":{{\"base64\":{BridgeJson.EscapeJson(base64)},\"mediaType\":\"image/png\"}}}}";
         }
 
         // ----- Scene View �ٿض��ʣ����䣬���� puerts ScreenCaptureBridge��-----
@@ -444,7 +444,7 @@ namespace UTAgent.Editor.PythonInterop
                 var p = (Vector3)svType2.GetProperty("pivot", BindingFlags.Instance | BindingFlags.Public).GetValue(sv);
                 var s = (float)svType2.GetProperty("size", BindingFlags.Instance | BindingFlags.Public).GetValue(sv);
                 var ic2 = System.Globalization.CultureInfo.InvariantCulture;
-                return $"{{\"success\":true,\"focused\":{EscapeJson(go.name)},\"pivot\":{{\"x\":{p.x.ToString("F3", ic2)},\"y\":{p.y.ToString("F3", ic2)},\"z\":{p.z.ToString("F3", ic2)}}},\"size\":{s.ToString("F3", ic2)}}}";
+                return $"{{\"success\":true,\"focused\":{BridgeJson.EscapeJson(go.name)},\"pivot\":{{\"x\":{p.x.ToString("F3", ic2)},\"y\":{p.y.ToString("F3", ic2)},\"z\":{p.z.ToString("F3", ic2)}}},\"size\":{s.ToString("F3", ic2)}}}";
             }
             catch (Exception e)
             {
@@ -467,7 +467,7 @@ namespace UTAgent.Editor.PythonInterop
                 var ping = eguiType?.GetMethod("PingObject", BindingFlags.Static | BindingFlags.Public, null,
                     new[] { typeof(UnityEngine.Object) }, null);
                 ping?.Invoke(null, new object[] { go });
-                return $"{{\"success\":true,\"selected\":{EscapeJson(go.name)}}}";
+                return $"{{\"success\":true,\"selected\":{BridgeJson.EscapeJson(go.name)}}}";
             }
             catch (Exception e)
             {
@@ -488,7 +488,7 @@ namespace UTAgent.Editor.PythonInterop
                 bool saved = savedMethod != null && (bool)savedMethod.Invoke(null, new object[] { scene });
                 if (saved)
                 {
-                    return $"{{\"success\":true,\"scene\":{EscapeJson(scene.name)},\"path\":{EscapeJson(scene.path)}}}";
+                    return $"{{\"success\":true,\"scene\":{BridgeJson.EscapeJson(scene.name)},\"path\":{BridgeJson.EscapeJson(scene.path)}}}";
                 }
                 return Error($"Failed to save scene '{scene.name}'.");
             }

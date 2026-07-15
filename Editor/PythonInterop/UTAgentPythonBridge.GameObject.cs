@@ -31,7 +31,7 @@ namespace UTAgent.Editor.PythonInterop
                 var go = GameObject.CreatePrimitive(primitiveType);
                 go.name = string.IsNullOrWhiteSpace(name) ? primType : name;
                 go.transform.position = new Vector3(x, y, z);
-                return $"{{\"success\":true,\"name\":{EscapeJson(go.name)},\"instanceId\":{go.GetInstanceID()}}}";
+                return $"{{\"success\":true,\"name\":{BridgeJson.EscapeJson(go.name)},\"instanceId\":{go.GetInstanceID()}}}";
             }
             catch (Exception e)
             {
@@ -49,7 +49,7 @@ namespace UTAgent.Editor.PythonInterop
             {
                 return "{\"success\":false}";
             }
-            return $"{{\"success\":true,\"name\":{EscapeJson(go.name)},\"instanceId\":{go.GetInstanceID()},\"active\":{ToLower(go.activeSelf)}}}";
+            return $"{{\"success\":true,\"name\":{BridgeJson.EscapeJson(go.name)},\"instanceId\":{go.GetInstanceID()},\"active\":{BridgeJson.ToLower(go.activeSelf)}}}";
         }
 
         /// <summary>
@@ -63,7 +63,7 @@ namespace UTAgent.Editor.PythonInterop
             }
             var matches = CollectGameObjectsByName(name);
             var items = matches
-                .Select(go => $"{{\"name\":{EscapeJson(go.name)},\"instanceId\":{go.GetInstanceID()},\"active\":{ToLower(go.activeSelf)}}}");
+                .Select(go => $"{{\"name\":{BridgeJson.EscapeJson(go.name)},\"instanceId\":{go.GetInstanceID()},\"active\":{BridgeJson.ToLower(go.activeSelf)}}}");
             return $"{{\"success\":true,\"count\":{matches.Count},\"objects\":[{string.Join(",", items)}]}}";
         }
 

@@ -19,6 +19,10 @@ namespace UTAgent.Editor.Core
         public const string AgentMinKeepMessagesKey = "UTAgent.Agent_MinKeepMessages";
         public const string AgentLogDirectoryKey = "UTAgent.Agent_LogDirectory";
 
+        public const string PythonHomeKey = "UTAgent.Python_Home";
+        public const string PythonDllKey = "UTAgent.Python_Dll";
+        public const string DefaultPythonDll = "python312.dll";
+
         public const string LegacyAgentApiKeyKey = "PythonBridge.Agent_ApiKey";
         public const string LegacyAgentBaseUrlKey = "PythonBridge.Agent_BaseURL";
         public const string LegacyAgentModelKey = "PythonBridge.Agent_Model";
@@ -115,6 +119,27 @@ namespace UTAgent.Editor.Core
         public static void SetAgentLogDirectory(string value)
         {
             EditorPrefs.SetString(AgentLogDirectoryKey, value ?? "");
+        }
+
+        public static string GetPythonHome()
+        {
+            return EditorPrefs.GetString(PythonHomeKey, "");
+        }
+
+        public static void SetPythonHome(string value)
+        {
+            EditorPrefs.SetString(PythonHomeKey, value ?? "");
+        }
+
+        public static string GetPythonDll()
+        {
+            string value = EditorPrefs.GetString(PythonDllKey, DefaultPythonDll);
+            return string.IsNullOrWhiteSpace(value) ? DefaultPythonDll : value.Trim();
+        }
+
+        public static void SetPythonDll(string value)
+        {
+            EditorPrefs.SetString(PythonDllKey, string.IsNullOrWhiteSpace(value) ? DefaultPythonDll : value.Trim());
         }
 
         public static string MigrateString(string newKey, string oldKey, string defaultValue = "")
