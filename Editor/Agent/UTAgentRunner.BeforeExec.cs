@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Text.RegularExpressions;
 using Debug = UnityEngine.Debug;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     public sealed partial class UTAgentRunner
     {

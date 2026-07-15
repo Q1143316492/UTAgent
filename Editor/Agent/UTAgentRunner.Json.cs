@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEditor;
+using UTAgent.Editor.Core;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     public sealed partial class UTAgentRunner
     {
@@ -63,7 +64,7 @@ namespace UTAgent.Editor
         private static string BuildSkillListMarkdown()
         {
             string skillDir = System.IO.Path.Combine(
-                UnityEngine.Application.dataPath, "UTAgent/Runtime/agent/skills");
+                UnityEngine.Application.dataPath, "UTAgent/Python/agent/skills");
             if (!System.IO.Directory.Exists(skillDir))
             {
                 return "- (none)\n";
@@ -394,17 +395,17 @@ namespace UTAgent.Editor
 
         private static int GetMaxStepsFromConfig()
         {
-            return EditorPrefs.GetInt("UTAgent.Agent_MaxSteps", 25);
+            return UTAgentPrefs.GetAgentMaxSteps();
         }
 
         private static int GetMaxInputTokensFromConfig()
         {
-            return EditorPrefs.GetInt("UTAgent.Agent_MaxInputTokens", 100000);
+            return UTAgentPrefs.GetAgentMaxInputTokens();
         }
 
         private static int GetMinKeepMessagesFromConfig()
         {
-            return EditorPrefs.GetInt("UTAgent.Agent_MinKeepMessages", 20);
+            return UTAgentPrefs.GetAgentMinKeepMessages();
         }
 
         private static string BuildMessagesArray(string systemPrompt, string messagesJson)

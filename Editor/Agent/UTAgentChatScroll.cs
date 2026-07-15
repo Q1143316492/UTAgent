@@ -1,8 +1,9 @@
 ﻿using System;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Core;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     /// <summary>
     /// 消息列表滚动。贴底仅在 Layout 且内容变长时跳一次。

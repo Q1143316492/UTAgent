@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Core
 {
     /// <summary>
     /// Python 输出捕获容器。__pybridge__ 模块的 log/err 把文本写进这里，Exec 取回。

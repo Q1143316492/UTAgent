@@ -4,26 +4,12 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Core;
 using UnityEngine.Networking;
 using Debug = UnityEngine.Debug;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
-    /// <summary>
-    /// 结构化进度事件。Runner 推送给 UI，UI 按 Type 区分渲染。
-    /// </summary>
-    public struct ProgressEvent
-    {
-        public string Type;
-        public string Text;
-    }
-
-    /// <summary>
-    /// Agent 一轮结束回调：finalText、isError、outcome（success/error/aborted/max_steps_summary 等）、events。
-    /// </summary>
-    public delegate void TurnResponseHandler(
-        string finalText, bool isError, string outcome, List<ProgressEvent> events);
-
     /// <summary>
     /// UT Agent 运行器（异步版）。对照 puerts 的 AgentScriptManager：
     /// 主线程状态机驱动 + UnityWebRequest 异步 HTTP + SSE 流式；Python 只暴露单步原子入口。
@@ -34,6 +20,7 @@ namespace UTAgent.Editor
         private const string ModuleImport = "import agent\n";
 
         private readonly List<TurnState> mActiveTurns = new List<TurnState>();
+        private bool mConfigured;
 
         /// <summary>
         /// outcome 是否允许 UI 显示「继续」。
@@ -100,11 +87,22 @@ namespace UTAgent.Editor
         {
             if (!UTAgentBootstrap.IsAvailable)
             {
+                mConfigured = false;
                 return "[Runner] 引擎不可用，请先初始化";
             }
             var script = ModuleImport +
                 $"agent.configure({EscapePy(apiKey)}, {EscapePy(baseURL)}, {EscapePy(model)}, {maxSteps})\n";
-            return SafeExec(script);
+            string result = SafeExec(script);
+            mConfigured = ParseExecOk(result, out _);
+            return result;
+        }
+
+        /// <summary>
+        /// Python agent 模块重载后须调用，避免 C# 缓存与 Python 状态不一致。
+        /// </summary>
+        public void InvalidateConfigured()
+        {
+            mConfigured = false;
         }
 
         /// <summary>
@@ -142,7 +140,7 @@ namespace UTAgent.Editor
                 Progress = onProgress,
                 StepCount = 0,
                 MaxSteps = GetMaxStepsFromConfig(),
-                Logger = UTAgentSessionLogger.BeginTurn(text, EditorPrefs.GetString("UTAgent.Agent_Model", "gpt-4o-mini"), imagePath),
+                Logger = UTAgentSessionLogger.BeginTurn(text, UTAgentPrefs.GetAgentModel(), imagePath),
             };
             mActiveTurns.Add(turn);
             if (!PrepareNextRequest(turn))
@@ -201,7 +199,7 @@ namespace UTAgent.Editor
                 StepCount = 0,
                 MaxSteps = GetMaxStepsFromConfig(),
                 Logger = UTAgentSessionLogger.BeginContinueTurn(
-                    EditorPrefs.GetString("UTAgent.Agent_Model", "gpt-4o-mini")),
+                    UTAgentPrefs.GetAgentModel()),
             };
             mActiveTurns.Add(turn);
             if (!PrepareNextRequest(turn))
@@ -250,12 +248,7 @@ namespace UTAgent.Editor
         /// </summary>
         public bool IsConfigured()
         {
-            if (!UTAgentBootstrap.IsAvailable)
-            {
-                return false;
-            }
-            var output = SafeExec(ModuleImport + "agent.is_configured()\n");
-            return ParseBool(output);
+            return UTAgentBootstrap.IsAvailable && mConfigured;
         }
 
         /// <summary>
@@ -968,9 +961,9 @@ namespace UTAgent.Editor
             public int MaxSteps;
             public UTAgentSessionLogger Logger;
 
-            public string ApiKey => EditorPrefs.GetString("UTAgent.Agent_ApiKey", "");
-            public string BaseUrl => EditorPrefs.GetString("UTAgent.Agent_BaseURL", "");
-            public string Model => EditorPrefs.GetString("UTAgent.Agent_Model", "gpt-4o-mini");
+            public string ApiKey => UTAgentPrefs.GetAgentApiKey();
+            public string BaseUrl => UTAgentPrefs.GetAgentBaseUrl();
+            public string Model => UTAgentPrefs.GetAgentModel();
         }
     }
 }

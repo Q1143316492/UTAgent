@@ -1,10 +1,12 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
-using UTAgent.Editor.Bridges;
+using UTAgent.Editor.PythonInterop;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Core
 {
     /// <summary>
     /// Python 引擎入口。内部转发给 <see cref="IPythonEngine"/> 单例。
@@ -111,21 +113,23 @@ namespace UTAgent.Editor
 
         private static void EnsureUnityModulePath(IPythonEngine engine)
         {
-            var runtimeDir = Path.Combine(Application.dataPath, "UTAgent", "Runtime").Replace('\\', '/');
-            var agentDir = Path.Combine(runtimeDir, "agent").Replace('\\', '/');
+            var pythonDir = Path.Combine(Application.dataPath, "UTAgent", "Python").Replace('\\', '/');
+            var agentDir = Path.Combine(pythonDir, "agent").Replace('\\', '/');
+            var legacyRuntimeDir = Path.Combine(Application.dataPath, "UTAgent", "Runtime").Replace('\\', '/');
             try
             {
-                // agent 目录必须排在 Runtime 之前：否则 import agent 会命中 Runtime/agent/ 空 namespace package。
+                // agent 目录必须排在 Python 根之前：否则 import agent 会命中 Python/agent/ 空 namespace package。
                 engine.Exec(
                     "import sys\n" +
                     $"_agent = r'{agentDir}'\n" +
-                    $"_runtime = r'{runtimeDir}'\n" +
-                    "for _p in (_agent, _runtime):\n" +
+                    $"_python = r'{pythonDir}'\n" +
+                    $"_legacy = r'{legacyRuntimeDir}'\n" +
+                    "for _p in (_agent, _python, _legacy):\n" +
                     "    while _p in sys.path:\n" +
                     "        sys.path.remove(_p)\n" +
-                    "sys.path.insert(0, _runtime)\n" +
+                    "sys.path.insert(0, _python)\n" +
                     "sys.path.insert(0, _agent)\n");
-                Debug.Log($"[UTAgent] 已注入模块路径（agent 优先）：{agentDir}; {runtimeDir}");
+                Debug.Log($"[UTAgent] 已注入模块路径（agent 优先）：{agentDir}; {pythonDir}");
             }
             catch (Exception e)
             {
@@ -135,19 +139,28 @@ namespace UTAgent.Editor
 
         private static void AddPythonPath()
         {
-            var runtimeDir = Path.Combine(Application.dataPath, "UTAgent", "Runtime");
-            if (!Directory.Exists(runtimeDir))
+            var pythonDir = Path.Combine(Application.dataPath, "UTAgent", "Python");
+            var agentDir = Path.Combine(pythonDir, "agent");
+            if (!Directory.Exists(pythonDir))
             {
-                Debug.LogWarning($"[UTAgent] Runtime 目录不存在：{runtimeDir}");
+                Debug.LogWarning($"[UTAgent] Python 目录不存在：{pythonDir}");
                 return;
             }
 
             const string Key = "PYTHONPATH";
             var existing = Environment.GetEnvironmentVariable(Key) ?? string.Empty;
-            var paths = string.IsNullOrEmpty(existing)
-                ? runtimeDir
-                : $"{runtimeDir};{existing}";
-            Environment.SetEnvironmentVariable(Key, paths);
+            var parts = existing.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            var legacyRuntime = Path.Combine(Application.dataPath, "UTAgent", "Runtime");
+            parts.RemoveAll(p => string.Equals(p, legacyRuntime, StringComparison.OrdinalIgnoreCase));
+            foreach (var req in new[] { agentDir, pythonDir })
+            {
+                if (!parts.Contains(req, StringComparer.OrdinalIgnoreCase))
+                {
+                    parts.Insert(0, req);
+                }
+            }
+
+            Environment.SetEnvironmentVariable(Key, string.Join(";", parts));
         }
 
         /// <summary>

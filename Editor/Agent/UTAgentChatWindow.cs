@@ -4,10 +4,11 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Core;
 
-using UTAgent.Editor.Bridge;
+using UTAgent.Editor.RemoteCli;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     /// <summary>
     /// Agent 消息分块。UI 按 Type 分块渲染，不压平为字符串。
@@ -21,11 +22,6 @@ namespace UTAgent.Editor
 
     public partial class UTAgentChatWindow : EditorWindow
     {
-        private const string PrefKeyApiKey = "UTAgent.Agent_ApiKey";
-        private const string PrefKeyBaseURL = "UTAgent.Agent_BaseURL";
-        private const string PrefKeyModel = "UTAgent.Agent_Model";
-        private const string PrefKeyMaxSteps = "UTAgent.Agent_MaxSteps";
-
         private readonly UTAgentRunner mRunner = new UTAgentRunner();
         private readonly UTAgentChatScroll mMessageScroll = new UTAgentChatScroll();
         private readonly List<ChatMessage> mMessages = new List<ChatMessage>();
@@ -125,7 +121,16 @@ namespace UTAgent.Editor
             {
                 if (GUILayout.Button("初始化引擎", EditorStyles.toolbarButton, GUILayout.Width(80)))
                 {
-                    try { UTAgentBootstrap.Initialize(); } catch (Exception e) { AddMessage($"[初始化失败] {e}", false); }
+                    try
+                    {
+                        UTAgentBootstrap.Initialize();
+                        mRunner.InvalidateConfigured();
+                        TrySilentConfigureRunner();
+                    }
+                    catch (Exception e)
+                    {
+                        AddMessage($"[初始化失败] {e}", false);
+                    }
                     Repaint();
                 }
             }
@@ -598,53 +603,30 @@ namespace UTAgent.Editor
 
         private void LoadSettings()
         {
-            mApiKey = MigratePrefString(PrefKeyApiKey, "PythonBridge.Agent_ApiKey");
-            mBaseURL = MigratePrefString(PrefKeyBaseURL, "PythonBridge.Agent_BaseURL");
-            mModel = MigratePrefString(PrefKeyModel, "PythonBridge.Agent_Model", "gpt-4o-mini");
-            mMaxSteps = MigratePrefInt(PrefKeyMaxSteps, "PythonBridge.Agent_MaxSteps", 25);
-            mLogDirectory = MigratePrefString(
-                UTAgentSessionLogger.PrefKeyLogDirectory,
-                "PythonBridge.Agent_LogDirectory");
-            mBridgeEnabled = EditorPrefs.GetBool(UTAgentEditorHttpServer.PrefKeyEnabled, false);
-            mBridgePort = UTAgentEditorHttpServer.GetPortPref();
-        }
-
-        private static string MigratePrefString(string newKey, string oldKey, string defaultValue = "")
-        {
-            var value = EditorPrefs.GetString(newKey, "");
-            if (string.IsNullOrEmpty(value))
-            {
-                value = EditorPrefs.GetString(oldKey, defaultValue);
-                if (!string.IsNullOrEmpty(value))
-                {
-                    EditorPrefs.SetString(newKey, value);
-                }
-            }
-            return string.IsNullOrEmpty(value) ? defaultValue : value;
-        }
-
-        private static int MigratePrefInt(string newKey, string oldKey, int defaultValue)
-        {
-            if (EditorPrefs.HasKey(newKey))
-            {
-                return EditorPrefs.GetInt(newKey, defaultValue);
-            }
-            if (EditorPrefs.HasKey(oldKey))
-            {
-                var value = EditorPrefs.GetInt(oldKey, defaultValue);
-                EditorPrefs.SetInt(newKey, value);
-                return value;
-            }
-            return defaultValue;
+            mApiKey = UTAgentPrefs.MigrateString(UTAgentPrefs.AgentApiKeyKey, UTAgentPrefs.LegacyAgentApiKeyKey);
+            mBaseURL = UTAgentPrefs.MigrateString(UTAgentPrefs.AgentBaseUrlKey, UTAgentPrefs.LegacyAgentBaseUrlKey);
+            mModel = UTAgentPrefs.MigrateString(
+                UTAgentPrefs.AgentModelKey,
+                UTAgentPrefs.LegacyAgentModelKey,
+                UTAgentPrefs.DefaultModel);
+            mMaxSteps = UTAgentPrefs.MigrateInt(
+                UTAgentPrefs.AgentMaxStepsKey,
+                UTAgentPrefs.LegacyAgentMaxStepsKey,
+                UTAgentPrefs.DefaultMaxSteps);
+            mLogDirectory = UTAgentPrefs.MigrateString(
+                UTAgentPrefs.AgentLogDirectoryKey,
+                UTAgentPrefs.LegacyAgentLogDirectoryKey);
+            mBridgeEnabled = UTAgentPrefs.GetBridgeEnabled();
+            mBridgePort = UTAgentPrefs.GetBridgePort();
         }
 
         private void SaveSettings()
         {
-            EditorPrefs.SetString(PrefKeyApiKey, mApiKey);
-            EditorPrefs.SetString(PrefKeyBaseURL, mBaseURL);
-            EditorPrefs.SetString(PrefKeyModel, mModel);
-            EditorPrefs.SetInt(PrefKeyMaxSteps, mMaxSteps);
-            EditorPrefs.SetString(UTAgentSessionLogger.PrefKeyLogDirectory, mLogDirectory ?? "");
+            UTAgentPrefs.SetAgentApiKey(mApiKey);
+            UTAgentPrefs.SetAgentBaseUrl(mBaseURL);
+            UTAgentPrefs.SetAgentModel(mModel);
+            UTAgentPrefs.SetAgentMaxSteps(mMaxSteps);
+            UTAgentPrefs.SetAgentLogDirectory(mLogDirectory ?? "");
         }
 
         private void ApplySettings()
@@ -672,7 +654,8 @@ namespace UTAgent.Editor
                 return;
             }
 
-            if (mRunner.IsConfigured())
+            mRunner.InvalidateConfigured();
+            if (!string.IsNullOrWhiteSpace(mApiKey))
             {
                 string result = mRunner.Configure(mApiKey, mBaseURL, mModel, mMaxSteps);
                 AddMessage($"Python 模块已重新加载；Agent 已重新配置。\n{result}", false);

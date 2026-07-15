@@ -1,7 +1,8 @@
 ﻿using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Core;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     public partial class UTAgentChatWindow
     {

@@ -1,8 +1,9 @@
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
-using UTAgent.Editor.Bridge;
+using UTAgent.Editor.Core;
+using UTAgent.Editor.RemoteCli;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     public partial class UTAgentChatWindow
     {

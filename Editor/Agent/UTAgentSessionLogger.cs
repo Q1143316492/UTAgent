@@ -3,8 +3,9 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Core;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Agent
 {
     /// <summary>
     /// Agent 会话日志：按小时追加到 agent_yyyyMMdd_HH.log；单轮对话锁定开始时刻的小时，跨小时不拆文件。
@@ -12,7 +13,7 @@ namespace UTAgent.Editor
     /// </summary>
     public sealed class UTAgentSessionLogger
     {
-        public const string PrefKeyLogDirectory = "UTAgent.Agent_LogDirectory";
+        public const string PrefKeyLogDirectory = UTAgentPrefs.AgentLogDirectoryKey;
 
         private const int MaxInlineChars = 4000;
 
@@ -36,7 +37,7 @@ namespace UTAgent.Editor
 
         public static string ResolveLogDirectory()
         {
-            string configured = EditorPrefs.GetString(PrefKeyLogDirectory, "").Trim();
+            string configured = UTAgentPrefs.GetAgentLogDirectory().Trim();
             if (string.IsNullOrEmpty(configured))
             {
                 return GetDefaultLogDirectory();

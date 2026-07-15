@@ -7,7 +7,7 @@ using Python.Runtime;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-namespace UTAgent.Editor
+namespace UTAgent.Editor.Core
 {
     /// <summary>
     /// PC Editor 期的 <see cref="IPythonEngine"/> 实现，基于 pythonnet 嵌入 CPython。

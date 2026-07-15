@@ -27,11 +27,24 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 
 ## unity 模块
 
-`unity` 按域拆 4 子模块：`unity.scene_view` / `unity.screenshot` / `unity.inspect` / `unity.console`。`unity.<verb>` 顶层路径仍可用（兼容层）。详见 `Runtime/agent/skills/python-interop.md.txt`。
+`unity` 按域拆 4 子模块：`unity.scene_view` / `unity.screenshot` / `unity.inspect` / `unity.console`。`unity.<verb>` 顶层路径仍可用（兼容层）。详见 `Python/agent/skills/python-interop.md.txt`。
+
+## 目录结构
+
+```
+Assets/UTAgent/
+├── Editor/          C# Editor 程序集（Agent / Core / PythonInterop / RemoteCli / PlayBinding / Config）
+├── Runtime/         C# Runtime 程序集（Engine / Play）
+├── Python/          Python 资源（agent / unity / unity_bind）
+├── Scripts/         业务 UI 面板 .py
+├── Tools/           utagent-cli、ui-benchmark
+├── Docs/            包内文档与基准
+└── ide-skills/      Cursor IDE skill（非 LLM loadSkill）
+```
 
 ## Cursor Skill
 
-复制 `cursor-skills/utagent-unity-verify/` 到项目 `.cursor/skills/`。
+复制 `ide-skills/utagent-unity-verify/` 到项目 `.cursor/skills/`。
 
 ## Docs / Benchmark
 
