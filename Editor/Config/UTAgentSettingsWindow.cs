@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -18,9 +20,9 @@ namespace UTAgent.Editor.Config
         private const int TabBridge = 2;
         private const int TabLog = 3;
 
-        private static readonly string[] sTabLabels = { "① Python", "② 大模型", "③ CLI", "日志" };
+        private static readonly string[] sTabLabels = { "Python", "大模型", "CLI", "日志" };
 
-        private int mTab;
+        private int mTab = TabChat;
         private readonly UTAgentRunner mRunner = new UTAgentRunner();
 
         private int mProviderIndex;
@@ -29,8 +31,8 @@ namespace UTAgent.Editor.Config
         private string mApiKeyEnvVar = UTAgentConfig.DefaultApiKeyEnvVar;
         private string mBaseUrlOverride = "";
         private bool mFoldBaseUrlOverride;
+        private bool mFoldPythonAdvanced;
 
-        private string mPythonDll = UTAgentConfig.DefaultPythonDll;
         private bool mBridgeEnabled = true;
         private int mBridgePort = UTAgentConfig.DefaultBridgePort;
         private string mLogDirectory = "";
@@ -56,8 +58,7 @@ namespace UTAgent.Editor.Config
         private void OnGUI()
         {
             UTAgentConfig.EnsureLoaded();
-            DrawSetupGuide();
-            DrawRuntimeStatus();
+            DrawRuntimeStatusIfNeeded();
 
             if (UTAgentConfig.ShowLegacyApiKeyWarning)
             {
@@ -88,111 +89,70 @@ namespace UTAgent.Editor.Config
             DrawFeedback();
         }
 
-        private void DrawSetupGuide()
-        {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("设置流程（按顺序）", EditorStyles.boldLabel);
-            EditorGUILayout.Space(2);
-            DrawStepButton(TabPython, IsStepPythonDone(), "第一步", "初始化 Python 环境");
-            DrawStepButton(TabChat, IsStepLlmDone(), "第二步", "配置大模型（API Key 用环境变量）");
-            DrawStepButton(TabBridge, IsStepCliDone(), "第三步", "Remote CLI（默认开启）");
-            EditorGUILayout.EndVertical();
-            EditorGUILayout.Space(4);
-        }
-
-        private void DrawStepButton(int tabIndex, bool done, string stepLabel, string title)
-        {
-            bool isCurrent = mTab == tabIndex;
-            string mark = done ? "✓" : "○";
-            string label = $"{mark} {stepLabel}  {title}";
-            var style = new GUIStyle(isCurrent ? EditorStyles.boldLabel : EditorStyles.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-            };
-            if (isCurrent)
-            {
-                GUI.backgroundColor = new Color(0.75f, 0.9f, 1f);
-            }
-
-            if (GUILayout.Button(label, style, GUILayout.Height(22)))
-            {
-                mTab = tabIndex;
-            }
-
-            GUI.backgroundColor = Color.white;
-        }
-
-        private static bool IsStepPythonDone()
-        {
-            return UTAgentBootstrap.IsAvailable
-                || PythonHomeResolver.ResolvePythonHome() != null;
-        }
-
-        private bool IsStepLlmDone()
-        {
-            return UTAgentConfig.TryCheckApiKey(mApiKeyEnvVar, out _);
-        }
-
-        private bool IsStepCliDone()
-        {
-            return mBridgeEnabled;
-        }
-
-        private void DrawRuntimeStatus()
+        /// <summary>
+        /// 仅在未就绪时提示（常见是缺 API Key）；已就绪不占空间。
+        /// </summary>
+        private void DrawRuntimeStatusIfNeeded()
         {
             UTAgentReadiness.Status status = UTAgentReadiness.GetChatStatus(mRunner);
-            MessageType boxType = status.Ready ? MessageType.Info : MessageType.Warning;
-            EditorGUILayout.HelpBox(UTAgentReadiness.FormatStatusBox(status), boxType);
+            if (status.Ready)
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox(UTAgentReadiness.FormatStatusBox(status), MessageType.Warning);
             EditorGUILayout.Space(2);
         }
 
         private void DrawPythonTab()
         {
-            DrawStepHeader("第一步：初始化 Python 环境");
-
-            string savedHome = UTAgentConfig.ResolvePythonHomeFromConfig();
-            string resolved = PythonHomeResolver.ResolvePythonHome();
+            bool homeReady = PythonHomeResolver.IsPythonHomeReady();
             bool engineUp = UTAgentBootstrap.IsAvailable;
 
-            if (!string.IsNullOrWhiteSpace(savedHome))
+            string statusLine;
+            if (!homeReady)
             {
-                EditorGUILayout.LabelField("已保存目录", savedHome);
+                statusLine = "✗ 未安装 PythonHome（将下载到 Assets/UTAgent/PythonHome）";
+            }
+            else if (engineUp)
+            {
+                statusLine = "✓ Python 已就绪";
+            }
+            else
+            {
+                statusLine = "○ PythonHome 已就绪，引擎未启动";
             }
 
-            EditorGUILayout.LabelField(
-                "引擎状态",
-                engineUp ? "✓ 运行中" : (resolved != null ? "○ 未启动（点保存后自动启动）" : "✗ 未找到 Python"));
+            EditorGUILayout.LabelField(statusLine, EditorStyles.wordWrappedLabel);
+            EditorGUILayout.Space(6);
 
-            if (!PythonHomeResolver.HasSavedPythonHome())
+            string buttonLabel = !homeReady
+                ? "下载并初始化"
+                : (engineUp ? "重新初始化" : "初始化");
+
+            if (GUILayout.Button(buttonLabel, GUILayout.Height(36)))
             {
-                if (GUILayout.Button("选择 Python 文件夹…", GUILayout.Height(32)))
+                BootstrapAndInitializePython();
+            }
+
+            mFoldPythonAdvanced = EditorGUILayout.Foldout(mFoldPythonAdvanced, "高级", true);
+            if (mFoldPythonAdvanced)
+            {
+                EditorGUI.indentLevel++;
+                EditorGUILayout.LabelField("路径", PythonHomeResolver.GetDisplayPythonHome());
+                if (GUILayout.Button("重置引擎", GUILayout.Height(24)))
                 {
-                    PickPythonFolder();
+                    ResetPython();
                 }
+
+                EditorGUI.indentLevel--;
             }
-
-            mPythonDll = EditorGUILayout.TextField("python*.dll", mPythonDll);
-
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("保存并初始化", GUILayout.Height(32)))
-            {
-                SavePythonSettings();
-            }
-
-            if (GUILayout.Button("重置引擎", GUILayout.Height(32)))
-            {
-                ResetPython();
-            }
-
-            EditorGUILayout.EndHorizontal();
         }
 
         private void DrawChatTab()
         {
-            DrawStepHeader("第二步：配置大模型");
-
             EditorGUILayout.LabelField(
-                $"API Key 通过环境变量 {mApiKeyEnvVar} 提供，不写入 JSON。",
+                $"日常只需配置 API Key（环境变量 {mApiKeyEnvVar}，不写入 JSON）。",
                 EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.Space(4);
 
@@ -211,10 +171,8 @@ namespace UTAgent.Editor.Config
 
         private void DrawBridgeTab()
         {
-            DrawStepHeader("第三步：Remote CLI（默认开启）");
-
             EditorGUILayout.LabelField(
-                "供 Cursor / utagent 命令调用。首次打开 Chat 时会按此配置启动监听。",
+                "供 Cursor / utagent 命令调用。默认开启；首次打开 Chat 时按此配置启动监听。",
                 EditorStyles.wordWrappedMiniLabel);
             EditorGUILayout.Space(4);
 
@@ -250,13 +208,6 @@ namespace UTAgent.Editor.Config
             }
 
             EditorGUILayout.EndHorizontal();
-        }
-
-        private static void DrawStepHeader(string title)
-        {
-            EditorGUILayout.Space(2);
-            EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
-            EditorGUILayout.Space(4);
         }
 
         private void DrawProviderModelFields()
@@ -304,21 +255,98 @@ namespace UTAgent.Editor.Config
             }
         }
 
-        private void PickPythonFolder()
+        private void BootstrapAndInitializePython()
         {
-            string start = PythonHomeResolver.GetDisplayPythonHome();
-            string picked = EditorUtility.OpenFolderPanel("选择 Python 安装目录", start, "");
-            if (string.IsNullOrEmpty(picked))
+            if (!PythonHomeResolver.IsPythonHomeReady())
             {
-                return;
+                bool ok = EditorUtility.DisplayDialog(
+                    "下载 PythonHome",
+                    "包内 PythonHome 尚未就绪。将运行 Install-PythonHome.ps1 下载官方 embeddable CPython 3.12（需要网络）。\n\n继续？",
+                    "下载并继续",
+                    "取消");
+                if (!ok)
+                {
+                    return;
+                }
+
+                if (!RunInstallPythonHomeScript())
+                {
+                    return;
+                }
             }
 
-            UTAgentConfig.Current.python.home = picked;
-            mPythonDll = UTAgentConfig.Current.python.dll;
-            UTAgentConfig.SaveLocal();
-            UTAgentReadiness.Status status = UTAgentReadiness.TryEnsurePythonEngine();
-            ShowStatusFeedback("Python 目录已保存", status);
+            bool forceReload = UTAgentBootstrap.IsAvailable;
+            UTAgentReadiness.Status status = UTAgentReadiness.ApplyPythonConfigAndInit(
+                forceReload: forceReload);
+            ShowStatusFeedback(
+                status.Ready
+                    ? (forceReload ? "已重新初始化" : "Python 环境已就绪")
+                    : "初始化未完成",
+                status);
             Repaint();
+        }
+
+        private bool RunInstallPythonHomeScript()
+        {
+            string script = PythonHomeResolver.GetInstallPythonHomeScriptPath();
+            if (!File.Exists(script))
+            {
+                ShowFeedback(
+                    $"未找到脚本：{script}\n请按 Docs/skills/utagent-env-bootstrap 手动安装。",
+                    MessageType.Error,
+                    12);
+                return false;
+            }
+
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+                using (Process process = Process.Start(psi))
+                {
+                    if (process == null)
+                    {
+                        ShowFeedback(
+                            $"无法启动 PowerShell。请手动执行：\n{script}",
+                            MessageType.Error,
+                            12);
+                        return false;
+                    }
+
+                    string stdout = process.StandardOutput.ReadToEnd();
+                    string stderr = process.StandardError.ReadToEnd();
+                    process.WaitForExit();
+                    AssetDatabase.Refresh();
+
+                    if (process.ExitCode != 0 || !PythonHomeResolver.IsPythonHomeReady())
+                    {
+                        string detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                        ShowFeedback(
+                            $"下载失败 (exit={process.ExitCode})。\n{detail}\n请手动执行：\n{script}",
+                            MessageType.Error,
+                            14);
+                        return false;
+                    }
+                }
+
+                ShowFeedback("PythonHome 已安装。", MessageType.Info, 4);
+                return true;
+            }
+            catch (Exception e)
+            {
+                ShowFeedback(
+                    $"无法运行下载脚本：{e.Message}\n请手动执行：\n{script}",
+                    MessageType.Error,
+                    12);
+                return false;
+            }
         }
 
         private void SaveChatSettings()
@@ -328,21 +356,12 @@ namespace UTAgent.Editor.Config
             ShowFeedback("大模型设置已保存。", MessageType.Info, 3);
         }
 
-        private void SavePythonSettings()
-        {
-            UTAgentConfig.Current.python.dll = string.IsNullOrWhiteSpace(mPythonDll)
-                ? UTAgentConfig.DefaultPythonDll
-                : mPythonDll.Trim();
-            UTAgentConfig.SaveLocal();
-            UTAgentReadiness.Status status = UTAgentReadiness.TryEnsurePythonEngine();
-            ShowStatusFeedback("Python 设置已保存", status);
-        }
-
         private void ResetPython()
         {
             try
             {
                 UTAgentBootstrap.Shutdown();
+                UTAgentReadiness.ClearAppliedSnapshot();
                 mRunner.InvalidateConfigured();
                 ShowFeedback("引擎已重置。", MessageType.Info, 4);
             }
@@ -400,7 +419,6 @@ namespace UTAgent.Editor.Config
             mMaxSteps = config.llm.maxSteps;
             mApiKeyEnvVar = config.apiKeyEnvVar;
             mBaseUrlOverride = config.llm.baseUrlOverride ?? "";
-            mPythonDll = config.python.dll;
             mBridgeEnabled = config.bridge.enabled;
             mBridgePort = config.bridge.port;
             mLogDirectory = string.IsNullOrWhiteSpace(config.log.directory)
@@ -434,10 +452,16 @@ namespace UTAgent.Editor.Config
 
         private void ShowStatusFeedback(string prefix, UTAgentReadiness.Status status)
         {
-            string message = status.Ready
-                ? $"{prefix}，{status.Summary}"
-                : $"{prefix}。{status.Summary}：{status.Detail}";
-            ShowFeedback(message, status.Ready ? MessageType.Info : MessageType.Warning, 6);
+            if (status.Ready)
+            {
+                ShowFeedback($"{prefix}，{status.Summary}", MessageType.Info, 6);
+                return;
+            }
+
+            string detail = string.IsNullOrWhiteSpace(status.Detail)
+                ? status.Summary
+                : $"{status.Summary}：{status.Detail}";
+            ShowFeedback($"{prefix}。{detail}", MessageType.Warning, 10);
         }
 
         private void DrawFeedback()

@@ -1,6 +1,6 @@
 """Unity / 组件生命周期 Python 基类。"""
 
-from unity.ui.core._base import UnityObject
+from unity.core.object import UnityObject
 
 
 class UnityBehaviour(UnityObject):

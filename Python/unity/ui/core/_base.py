@@ -3,6 +3,8 @@
 import json
 import sys
 
+from unity.core.object import UnityObject
+
 
 def _ui_bridge():
     """从 sys.modules 取当前 UI 桥。"""
@@ -11,16 +13,6 @@ def _ui_bridge():
     if mod is not None:
         return mod
     return __import__(name)
-
-
-class UnityObject:
-    """Unity 对象包装（handle = InstanceID）。"""
-
-    def __init__(self, handle, type_name):
-        if not isinstance(handle, int):
-            raise TypeError("handle 必须是 int（Unity InstanceID）")
-        self._handle = handle
-        self._type = type_name
 
 
 def _call_ui_bridge(type_name, member, args_json):

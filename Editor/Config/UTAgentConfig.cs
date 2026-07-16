@@ -108,6 +108,13 @@ namespace UTAgent.Editor.Config
                 log = CloneLog(mCurrent.log),
             };
 
+            // 不再持久化外部 home；旧 local 中的路径在下次保存时清掉
+            if (local.python != null)
+            {
+                local.python.home = "";
+                mCurrent.python.home = "";
+            }
+
             string json = JsonUtility.ToJson(local, true);
             File.WriteAllText(LocalPath, json);
         }
@@ -250,15 +257,12 @@ namespace UTAgent.Editor.Config
             return steps;
         }
 
+        /// <summary>
+        /// 已废弃：运行时只认包内 PythonHome，忽略 json 中的 <c>python.home</c>。
+        /// </summary>
         public static string ResolvePythonHomeFromConfig()
         {
-            string home = Current.python?.home;
-            if (string.IsNullOrWhiteSpace(home))
-            {
-                return "";
-            }
-
-            return home.Trim();
+            return "";
         }
 
         public static string ResolvePythonDll()

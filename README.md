@@ -18,7 +18,7 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 
 ### 快速上手
 
-1. 设置 API Key 环境变量（默认名 `UTAGENT_API_KEY`）：
+日常只需配置 **API Key**（默认环境变量名 `UTAGENT_API_KEY`）：
 
 ```powershell
 $env:UTAGENT_API_KEY = "sk-..."
@@ -26,23 +26,33 @@ $env:UTAGENT_API_KEY = "sk-..."
 
 若在 Windows「用户变量」中新增，需**完全退出并重启 Unity Editor** 后进程才会继承。
 
-2. `Window/UT Agent/Settings` 按顶部三步引导配置（见下表）。
-3. `Window/UT Agent/Agent Chat` 发消息；运行时自动初始化 Python 并配置 Agent，无需单独「应用」按钮。
+新机可选：
+
+```powershell
+./Assets/UTAgent/Tools/bootstrap/Install-PythonHome.ps1
+./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1
+```
+
+或在 `Window/UT Agent/Settings` → **Python** 点「下载并初始化」。详见 `Docs/skills/utagent-env-bootstrap/SKILL.md`。
+
+然后 `Window/UT Agent/Agent Chat` 发消息即可（Python / CLI 按需自动就绪）。
 
 ### 配置（`Window/UT Agent/Settings`）
 
 | Tab | 内容 |
 |-----|------|
-| ① Python | 选择一次 CPython 目录、「保存并初始化」或「重置引擎」 |
-| ② 大模型 | Provider / Model（预制 DeepSeek V4 Flash / Pro）、Max Steps、API Key **环境变量名**（状态自动显示） |
-| ③ CLI | Remote CLI 启用与端口（**默认开启**） |
+| 大模型 | **主要配置**：Provider / Model、Max Steps、API Key 环境变量名 |
+| Python | 一行状态 + 主按钮（缺则下载并初始化）；路径/重置在「高级」 |
+| CLI | Remote CLI 启用与端口（**默认开启**） |
 | 日志 | 目录（默认 `Assets/UTAgent/LOG/`） |
 
 - **配置文件**：`Config/utagent.defaults.json`（跟踪版本）+ `Config/utagent.local.json`（gitignore，用户覆盖）
-- **API Key**：仅存环境变量，不写入 JSON；② 大模型 Tab 显示「已设置 / 未设置」
-- **Python 路径解析**：json 已保存目录 → `PYTHONHOME` → `Assets/UTAgent/PythonHome/` → 平台探测
+- **API Key**：仅存环境变量，不写入 JSON
+- **Python**：只认 `Assets/UTAgent/PythonHome/`（含 `python312.dll`）；忽略 json/`PYTHONHOME`/本机探测
 - **Editor 启动**：不自动迁移配置、不自动启 CLI；打开 Chat 时按 json 同步 CLI 监听
-- **发消息**：自动 `Initialize` + `ConfigureFromConfig`（前提：API Key 与 Python 路径可用）
+- **发消息**：自动 `Initialize` + `ConfigureFromConfig`（前提：API Key 与 PythonHome 就绪）
+
+> 注：曾规划的「更换/清除外部 Python 路径」UI（`fix-python-config-ux`）已被本方案取代，不再支持选本机 Programs\Python。
 
 ## CLI
 
@@ -65,17 +75,23 @@ Assets/UTAgent/
 ├── Runtime/         C# Runtime 程序集（Engine / Play）
 ├── Python/          Python 资源（agent / unity / unity_bind）
 ├── Scripts/         业务 UI 面板 .py
-├── Tools/           utagent-cli、ui-benchmark
-├── Docs/            包内文档与基准
+├── Tools/           utagent-cli、ui-benchmark、bootstrap
+├── Docs/            包内文档、skills、基准
 ├── Config/          utagent.defaults.json + utagent.local.json（用户覆盖）
-├── PythonHome/      本机 CPython 嵌入（gitignore，可选）
+├── PythonHome/      嵌入式 CPython（gitignore；仅认此目录）
 ├── LOG/             Agent 会话日志（gitignore，运行时生成）
-└── ide-skills/      Cursor IDE skill（非 LLM loadSkill）
+└── ide-skills/      Cursor IDE skill 源（用 Install-IdeSkills.ps1 复制）
 ```
 
 ## Cursor Skill
 
-复制 `ide-skills/utagent-unity-verify/` 到项目 `.cursor/skills/`。
+```powershell
+./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1
+```
+
+或手动复制 `ide-skills/utagent-unity-verify/` 到项目 `.cursor/skills/`。
+
+环境初始化手册：`Docs/skills/utagent-env-bootstrap/SKILL.md`。
 
 ## Docs / Benchmark
 

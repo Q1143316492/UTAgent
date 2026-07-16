@@ -1,12 +1,10 @@
-using System;
 using System.IO;
-using System.Linq;
 using UTAgent.Editor.Config;
 
 namespace UTAgent.Editor.Core
 {
     /// <summary>
-    /// 解析本机 CPython 安装目录（json → PYTHONHOME → 包内 PythonHome → 常见路径探测）。
+    /// 解析包内嵌入式 CPython：仅 <c>Assets/UTAgent/PythonHome</c>（含约定 dll）。
     /// </summary>
     public static class PythonHomeResolver
     {
@@ -16,53 +14,40 @@ namespace UTAgent.Editor.Core
         }
 
         /// <summary>
-        /// 用于 UI 展示：已保存或已解析到的目录。
+        /// UI 展示用路径（始终为包内 PythonHome，无论是否已安装）。
         /// </summary>
         public static string GetDisplayPythonHome()
         {
-            string saved = UTAgentConfig.ResolvePythonHomeFromConfig();
-            if (!string.IsNullOrWhiteSpace(saved))
-            {
-                return Path.GetFullPath(saved.Trim());
-            }
-
-            return ResolvePythonHome() ?? GetDefaultPythonHome();
+            return GetDefaultPythonHome();
         }
 
         /// <summary>
-        /// 用户是否已在 json 中保存过 Python 目录（选过一次后不再提示选择）。
+        /// PythonHome 是否已就绪（目录存在且含 dll）。
         /// </summary>
-        public static bool HasSavedPythonHome()
+        public static bool IsPythonHomeReady()
         {
-            return !string.IsNullOrWhiteSpace(UTAgentConfig.ResolvePythonHomeFromConfig());
+            return ResolvePythonHome() != null;
         }
 
+        /// <summary>
+        /// 仅当包内 PythonHome 有效时返回其绝对路径；否则 null。
+        /// </summary>
         public static string ResolvePythonHome()
         {
-            string fromConfig = UTAgentConfig.ResolvePythonHomeFromConfig();
-            if (IsValidHome(fromConfig))
+            string home = PythonPathConfig.BundledPythonHome;
+            if (!IsValidHome(home))
             {
-                return Path.GetFullPath(fromConfig.Trim());
+                return null;
             }
 
-            string fromEnv = Environment.GetEnvironmentVariable("PYTHONHOME");
-            if (IsValidHome(fromEnv))
+            string dllName = UTAgentConfig.ResolvePythonDll();
+            string dllPath = Path.Combine(home, dllName);
+            if (!File.Exists(dllPath))
             {
-                return Path.GetFullPath(fromEnv.Trim());
+                return null;
             }
 
-            if (IsValidHome(PythonPathConfig.BundledPythonHome))
-            {
-                return Path.GetFullPath(PythonPathConfig.BundledPythonHome);
-            }
-
-            string probed = ProbeCommonInstall();
-            if (!string.IsNullOrEmpty(probed))
-            {
-                return Path.GetFullPath(probed);
-            }
-
-            return null;
+            return Path.GetFullPath(home);
         }
 
         public static string ResolvePythonDllFileName()
@@ -70,34 +55,18 @@ namespace UTAgent.Editor.Core
             return UTAgentConfig.ResolvePythonDll();
         }
 
+        /// <summary>
+        /// Install-PythonHome.ps1 的绝对路径。
+        /// </summary>
+        public static string GetInstallPythonHomeScriptPath()
+        {
+            return Path.GetFullPath(
+                Path.Combine(PythonPathConfig.PackageRoot, "Tools", "bootstrap", "Install-PythonHome.ps1"));
+        }
+
         private static bool IsValidHome(string path)
         {
             return !string.IsNullOrWhiteSpace(path) && Directory.Exists(path.Trim());
-        }
-
-        private static string ProbeCommonInstall()
-        {
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string pythonRoot = Path.Combine(localAppData, "Programs", "Python");
-            if (!Directory.Exists(pythonRoot))
-            {
-                return null;
-            }
-
-            string dllName = UTAgentConfig.ResolvePythonDll();
-            string[] dirs = Directory.GetDirectories(pythonRoot, "Python3*")
-                .OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            foreach (string dir in dirs)
-            {
-                string dll = Path.Combine(dir, dllName);
-                if (File.Exists(dll) || File.Exists(Path.Combine(dir, "python.exe")))
-                {
-                    return dir;
-                }
-            }
-
-            return null;
         }
     }
 }

@@ -196,8 +196,8 @@ namespace UTAgent.Editor.Core
             if (string.IsNullOrEmpty(pythonHome))
             {
                 throw new InvalidOperationException(
-                    $"[UTAgent] 未找到 Python 安装目录。请将 CPython 3.12 拷入 {PythonHomeResolver.GetDefaultPythonHome()}，" +
-                    "或在 Window/UT Agent/Settings → ① Python 选择安装目录。");
+                    $"[UTAgent] 未找到包内 PythonHome（需含 python312.dll）：{PythonHomeResolver.GetDefaultPythonHome()}。" +
+                    "请运行 Tools/bootstrap/Install-PythonHome.ps1，或在 Settings → ① Python 点初始化（见 Docs/skills/utagent-env-bootstrap）。");
             }
 
             Environment.SetEnvironmentVariable("PYTHONHOME", pythonHome);

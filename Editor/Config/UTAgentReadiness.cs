@@ -10,6 +10,15 @@ namespace UTAgent.Editor.Config
     /// </summary>
     public static class UTAgentReadiness
     {
+        /// <summary>
+        /// 上次成功 Initialize 时生效的 home/dll（用于检测配置变更是否需 Shutdown 重载）。
+        /// </summary>
+        private static string sAppliedHome = "";
+        private static string sAppliedDll = "";
+
+        public const string DomainReloadHint =
+            "配置已保存；请触发一次脚本编译（域重载）或重启 Unity Editor 后再初始化。";
+
         public readonly struct Status
         {
             public bool Ready { get; }
@@ -39,7 +48,7 @@ namespace UTAgent.Editor.Config
                 return new Status(
                     false,
                     "需要 Python",
-                    "在 Python Tab 选择安装目录，或设置 PYTHONHOME / 拷入 Assets/UTAgent/PythonHome/");
+                    "Settings → ① Python 点「初始化」，或运行 Tools/bootstrap/Install-PythonHome.ps1（见 Docs/skills/utagent-env-bootstrap）");
             }
 
             if (!UTAgentBootstrap.IsAvailable)
@@ -50,12 +59,17 @@ namespace UTAgent.Editor.Config
                 return new Status(false, "引擎未就绪", hint);
             }
 
+            // Settings 与 Chat 各持有独立 Runner；未 configure 不代表环境坏了。
+            // Python + API Key 已齐即视为就绪，首条 Chat 会自动 ConfigureFromConfig。
             if (runner != null && runner.IsConfigured())
             {
                 return new Status(true, "可以对话", "");
             }
 
-            return new Status(false, "Agent 未配置", "保存设置后去 Chat 发一条消息即可");
+            return new Status(
+                true,
+                "Python 已就绪",
+                "去 Chat 发一条消息即可（会自动配置 Agent）");
         }
 
         /// <summary>
@@ -74,7 +88,7 @@ namespace UTAgent.Editor.Config
                 return new Status(
                     false,
                     "缺少 Python",
-                    "Settings → Python：选择含 python312.dll 的目录（只需选一次）");
+                    "Settings → ① Python 初始化，或执行 Install-PythonHome.ps1");
             }
 
             if (!UTAgentBootstrap.IsAvailable)
@@ -109,28 +123,120 @@ namespace UTAgent.Editor.Config
         }
 
         /// <summary>
-        /// 仅同步 Python 引擎（保存 Python 路径后调用）。
+        /// 仅同步 Python 引擎（保存 Python 路径后调用）。配置未变且已可用时跳过。
         /// </summary>
         public static Status TryEnsurePythonEngine()
         {
-            if (PythonHomeResolver.ResolvePythonHome() == null)
+            return ApplyPythonConfigAndInit(forceReload: false);
+        }
+
+        /// <summary>
+        /// 按包内 PythonHome + 默认 dll 应用并初始化。
+        /// forceReload 或相对上次生效值有变更时：先 Shutdown 再 Initialize。
+        /// </summary>
+        public static Status ApplyPythonConfigAndInit(bool forceReload)
+        {
+            string resolved = PythonHomeResolver.ResolvePythonHome();
+            if (resolved == null)
             {
-                return new Status(false, "路径无效", "请选择有效的 Python 安装目录");
+                return new Status(
+                    false,
+                    "PythonHome 未就绪",
+                    "运行 Tools/bootstrap/Install-PythonHome.ps1，或见 Docs/skills/utagent-env-bootstrap");
             }
 
-            if (UTAgentBootstrap.IsAvailable)
+            string home = resolved;
+            string dll = UTAgentConfig.ResolvePythonDll();
+            bool homeChanged = !PathsEqual(sAppliedHome, home);
+            bool dllChanged = !string.Equals(sAppliedDll, dll, StringComparison.OrdinalIgnoreCase);
+            bool hasSnapshot = !string.IsNullOrEmpty(sAppliedDll);
+
+            if (UTAgentBootstrap.IsAvailable && !forceReload && !hasSnapshot)
+            {
+                // Chat/CLI 已拉起引擎，快照尚未记录：认领当前配置，避免无谓重载
+                sAppliedHome = home;
+                sAppliedDll = dll;
+                return new Status(true, "引擎已在运行", "");
+            }
+
+            bool needReload = forceReload
+                || (hasSnapshot && (homeChanged || dllChanged));
+
+            if (UTAgentBootstrap.IsAvailable && !needReload)
             {
                 return new Status(true, "引擎已在运行", "");
+            }
+
+            bool didShutdown = false;
+            if (UTAgentBootstrap.IsAvailable)
+            {
+                try
+                {
+                    UTAgentBootstrap.Shutdown();
+                    didShutdown = true;
+                }
+                catch (Exception e)
+                {
+                    return new Status(
+                        false,
+                        "重置引擎失败",
+                        e.Message + "\n" + DomainReloadHint);
+                }
             }
 
             try
             {
                 UTAgentBootstrap.Initialize();
+                sAppliedHome = home;
+                sAppliedDll = dll;
+                if (didShutdown)
+                {
+                    return new Status(true, "已按新配置重新初始化", "");
+                }
+
                 return new Status(true, "引擎已启动", "");
             }
             catch (Exception e)
             {
-                return new Status(false, "初始化失败", e.Message);
+                ClearAppliedSnapshot();
+                return new Status(
+                    false,
+                    "初始化失败",
+                    e.Message + "\n" + DomainReloadHint);
+            }
+        }
+
+        /// <summary>
+        /// 手动 Shutdown 后清快照，下次保存会重新 Initialize。
+        /// </summary>
+        public static void ClearAppliedSnapshot()
+        {
+            sAppliedHome = "";
+            sAppliedDll = "";
+        }
+
+        private static bool PathsEqual(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) && string.IsNullOrWhiteSpace(b))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(
+                    System.IO.Path.GetFullPath(a.Trim()),
+                    System.IO.Path.GetFullPath(b.Trim()),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
             }
         }
 
