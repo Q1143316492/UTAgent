@@ -34,6 +34,7 @@ import copy
 
 from messages import (
     ASSISTANT,
+    COMPACTION,
     NUDGE,
     REMINDER,
     SCREENSHOT,
@@ -45,9 +46,10 @@ from messages import (
     history_tool_message,
     history_user_message,
 )
+from compaction import build_compaction_payload, make_compaction_history_message
 
 # AGENT_API_VERSION：仅诊断用；模块刷新由 App.sync_runtime_modules（磁盘 mtime）驱动。
-AGENT_API_VERSION = 8
+AGENT_API_VERSION = 9
 
 _SCENE_OBJECT_NAME_RE = re.compile(r'GameObject\s*\(\s*["\']([^"\']+)["\']')
 
@@ -342,48 +344,127 @@ def process_pending_images():
     print(json.dumps({"ok": True, "injected": injected}, ensure_ascii=False))
 
 
-def prepare_history_for_step(step_number, max_input_tokens, min_keep_messages):
-    """步前历史变换：裁剪旧 tool 输出、必要时 emergency trim。返回副本，不改 _history。"""
-    messages, pruned_chars, estimated, emergency_trim, _ = _prepare_messages_copy(
-        step_number, max_input_tokens, min_keep_messages
+def prepare_history_for_step(step_number, max_input_tokens, min_keep_messages, allow_compaction=True):
+    """步前历史变换：裁剪旧 tool 输出、必要时 compaction / emergency trim。返回副本，不改 _history。"""
+    (
+        messages,
+        pruned_chars,
+        estimated,
+        emergency_trim,
+        filter_meta,
+        needs_compaction,
+        compaction_messages,
+        keep_n,
+    ) = _prepare_messages_copy(
+        step_number, max_input_tokens, min_keep_messages, allow_compaction=allow_compaction
     )
-    print(json.dumps({
+    payload = {
         "ok": True,
         "value": messages,
         "pruned_chars": pruned_chars,
         "estimated_tokens": estimated,
         "emergency_trim": emergency_trim,
+        "needs_compaction": needs_compaction,
+        "keep_n": keep_n,
         "step_number": int(step_number) if step_number is not None else 0,
-    }, ensure_ascii=False))
+    }
+    payload.update(filter_meta)
+    if needs_compaction and compaction_messages is not None:
+        payload["compaction_messages"] = compaction_messages
+    print(json.dumps(payload, ensure_ascii=False))
 
 
-def build_llm_messages_json(step_number, max_input_tokens, min_keep_messages, model=""):
+def build_llm_messages_json(
+    step_number,
+    max_input_tokens,
+    min_keep_messages,
+    model="",
+    allow_compaction=True,
+):
     """构建含 system 的完整 messages 数组。最后一行 print 为数组 JSON（供 C# 直接嵌入请求体）。
 
     model: 当前 LLM 模型名（由 C# 从 JSON 配置传入，避免 agent 模块刷新后 _model 丢失）。
+    allow_compaction: False 时超预算直接静态 emergency trim（防重入 / 配置关闭）。
+    若 needs_compaction：最后一行为摘要请求 messages（无 tools），非业务 LLM messages。
     """
     global _model
     if isinstance(model, str) and model.strip():
         _model = model.strip()
     active_model = _model
 
-    messages, pruned_chars, estimated, emergency_trim, filter_meta = _prepare_messages_copy(
-        step_number, max_input_tokens, min_keep_messages, active_model
+    (
+        messages,
+        pruned_chars,
+        estimated,
+        emergency_trim,
+        filter_meta,
+        needs_compaction,
+        compaction_messages,
+        keep_n,
+    ) = _prepare_messages_copy(
+        step_number,
+        max_input_tokens,
+        min_keep_messages,
+        active_model,
+        allow_compaction=allow_compaction,
     )
-    system_content = _turn_system_prompt if _turn_system_prompt else _build_system_prompt()
-    full = [{"role": "system", "content": system_content}] + messages
-    _sanitize_messages_for_llm_api(full, active_model)
     meta = {
         "ok": True,
         "pruned_chars": pruned_chars,
         "estimated_tokens": estimated,
         "emergency_trim": emergency_trim,
+        "needs_compaction": needs_compaction,
+        "keep_n": keep_n,
         "step_number": int(step_number) if step_number is not None else 0,
     }
     meta.update(filter_meta)
     print(json.dumps(meta, ensure_ascii=False))
+    if needs_compaction and compaction_messages is not None:
+        print(json.dumps(compaction_messages, ensure_ascii=False))
+        return
+    system_content = _turn_system_prompt if _turn_system_prompt else _build_system_prompt()
+    full = [{"role": "system", "content": system_content}] + messages
+    _sanitize_messages_for_llm_api(full, active_model)
     print(json.dumps(full, ensure_ascii=False))
 
+
+def apply_compaction_summary(summary_text, keep_n=None):
+    """将 LLM 摘要持久写入 _history：折叠旧前缀，插入 kind=compaction。"""
+    global _history
+    try:
+        n = int(keep_n) if keep_n is not None else DEFAULT_MIN_KEEP_MESSAGES
+    except (TypeError, ValueError):
+        n = DEFAULT_MIN_KEEP_MESSAGES
+    if n <= 0:
+        n = DEFAULT_MIN_KEEP_MESSAGES
+    msg = make_compaction_history_message(summary_text)
+    if msg is None:
+        print(json.dumps({"ok": False, "message": "empty summary"}, ensure_ascii=False))
+        return
+    if len(_history) <= n:
+        # 仍写入摘要，避免空操作；不丢历史
+        _history.insert(0, msg)
+        print(json.dumps({
+            "ok": True,
+            "history_len": len(_history),
+            "compaction_kind": COMPACTION,
+        }, ensure_ascii=False))
+        return
+    start = _align_safe_trim_start(_history, len(_history) - n)
+    kept = _history[start:]
+    _history = [msg] + kept
+    print(json.dumps({
+        "ok": True,
+        "history_len": len(_history),
+        "kept": len(kept),
+        "compaction_kind": COMPACTION,
+    }, ensure_ascii=False))
+
+
+def get_compaction_system_prompt():
+    """诊断 / 测试用：返回摘要 system prompt。"""
+    from compaction import COMPACTION_SYSTEM_PROMPT
+    print(json.dumps({"ok": True, "value": COMPACTION_SYSTEM_PROMPT}, ensure_ascii=False))
 
 def append_assistant_content(text, reasoning_content=None):
     """追加纯文本 assistant 消息（最终回复）。"""
@@ -759,8 +840,14 @@ def _prune_old_tool_outputs(messages, max_chars):
     return pruned
 
 
-def _prepare_messages_copy(step_number, max_input_tokens, min_keep_messages, model=""):
-    """步前历史变换副本（不改 _history）：先 convert_to_llm，再 token 裁剪。"""
+def _prepare_messages_copy(
+    step_number,
+    max_input_tokens,
+    min_keep_messages,
+    model="",
+    allow_compaction=True,
+):
+    """步前历史变换副本（不改 _history）：先 convert_to_llm，再 token 裁剪 / compaction 信号。"""
     try:
         max_tokens = int(max_input_tokens)
     except (TypeError, ValueError):
@@ -779,17 +866,44 @@ def _prepare_messages_copy(step_number, max_input_tokens, min_keep_messages, mod
     pruned_chars = 0
     estimated = _estimate_messages_tokens(messages)
     emergency_trim = False
+    needs_compaction = False
+    compaction_messages = None
     if estimated > max_tokens:
         pruned_chars = _prune_old_tool_outputs(messages, TOOL_OUTPUT_TRUNCATE_CHARS)
         estimated = _estimate_messages_tokens(messages)
     if estimated > max_tokens:
+        if allow_compaction and len(messages) > keep_n:
+            start = _align_safe_trim_start(messages, len(messages) - keep_n)
+            prefix = messages[:start]
+            if prefix:
+                needs_compaction = True
+                compaction_messages = build_compaction_payload(prefix)
+                # 不改 messages / 不 emergency；等 C# 摘要后再 prepare
+                return (
+                    messages,
+                    pruned_chars,
+                    estimated,
+                    False,
+                    filter_meta,
+                    True,
+                    compaction_messages,
+                    keep_n,
+                )
         emergency_trim = True
         _emergency_trim(messages, keep_n)
         estimated = _estimate_messages_tokens(messages)
     _repair_tool_call_sequences(messages)
     _sanitize_messages_for_llm_api(messages, model)
-    return messages, pruned_chars, estimated, emergency_trim, filter_meta
-
+    return (
+        messages,
+        pruned_chars,
+        estimated,
+        emergency_trim,
+        filter_meta,
+        needs_compaction,
+        compaction_messages,
+        keep_n,
+    )
 
 def _sanitize_messages_for_llm_api(messages, model):
     """发送前规范化 OpenAI messages（DeepSeek V4 thinking + tool 回放 + text-only 视觉剥离）。"""
@@ -859,13 +973,13 @@ def _strip_vision_content_for_text_only(messages):
 
 
 def _emergency_trim(messages, keep_n):
-    """保留最近 N 条，开头插入压缩占位 user 消息。"""
+    """保留最近 N 条，开头插入压缩占位 user 消息（API 副本；无 kind）。"""
     if len(messages) <= keep_n:
         return
     start = _align_safe_trim_start(messages, len(messages) - keep_n)
     kept = messages[start:]
     messages.clear()
-    messages.append(history_user_message(COMPACTED_CONTEXT_PLACEHOLDER, kind=USER))
+    messages.append({"role": "user", "content": COMPACTED_CONTEXT_PLACEHOLDER})
     messages.extend(kept)
 
 

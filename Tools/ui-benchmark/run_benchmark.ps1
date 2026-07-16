@@ -127,6 +127,13 @@ if ($j) {
     Add-Result -Id "E10" -Ok ($j.ok -eq $true) -Detail "history_after_load=$($j.history_len_after_load) status_in_history=$($j.status_in_history)"
 } else { Add-Result -Id "E10" -Ok $false -Detail "parse fail" }
 
+# E11 LLM compaction kind + needs_compaction 信号
+$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_compaction_e11.py"))
+$j = Get-JsonLine -Text $out
+if ($j) {
+    Add-Result -Id "E11" -Ok ($j.ok -eq $true) -Detail "kind=$($j.compaction_kind_present) llm=$($j.compaction_in_llm) needs=$($j.needs_compaction)"
+} else { Add-Result -Id "E11" -Ok $false -Detail "parse fail" }
+
 # ---- Step 3: L2 行为用例（可选） ----
 if ($L2 -and -not $L1Only) {
     Write-Host "[3/4] L2 行为用例 (utagent chat)..."

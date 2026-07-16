@@ -21,7 +21,8 @@
         "providerId": "deepseek",
         "modelId": "deepseek-v4-flash",
         "maxSteps": 50,
-        "baseUrlOverride": ""
+        "baseUrlOverride": "",
+        "compactionEnabled": true
     },
     "python": {
         "home": "",

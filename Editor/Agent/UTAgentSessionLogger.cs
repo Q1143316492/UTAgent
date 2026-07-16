@@ -142,6 +142,17 @@ namespace UTAgent.Editor.Agent
                 $"llm-prepare reminder_in_history={reminderInHistory} reminder_in_llm={reminderInLlm}");
         }
 
+        public void LogCompaction(string phase, string detail = null)
+        {
+            FlushStreamBuffers();
+            string line = $"compaction: {phase}";
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                line += $" {detail.Trim()}";
+            }
+            WriteTimestamped(line);
+        }
+
         public void LogLlmError(string detail)
         {
             FlushStreamBuffers();

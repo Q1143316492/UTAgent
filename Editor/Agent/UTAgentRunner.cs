@@ -289,9 +289,33 @@ namespace UTAgent.Editor.Agent
                 }
                 SafeExec(ModuleImport + $"agent.ensure_model({EscapePy(turn.Model)})\n");
                 SafeExec(ModuleImport + "agent.process_pending_images()\n");
+                bool allowCompaction = UTAgentConfig.ResolveCompactionEnabled() && !turn.JustCompacted;
+                string allowPy = allowCompaction ? "True" : "False";
                 string prepareOutput = SafeExec(ModuleImport +
-                    $"agent.build_llm_messages_json({turn.StepCount + 1}, {GetMaxInputTokensFromConfig()}, {GetMinKeepMessagesFromConfig()}, {EscapePy(turn.Model)})\n");
+                    $"agent.build_llm_messages_json({turn.StepCount + 1}, {GetMaxInputTokensFromConfig()}, {GetMinKeepMessagesFromConfig()}, {EscapePy(turn.Model)}, {allowPy})\n");
                 LogPrepareResult(turn, prepareOutput);
+                if (ExtractBool(prepareOutput, "needs_compaction"))
+                {
+                    int keepN = ExtractInt(prepareOutput, "keep_n");
+                    if (keepN > 0)
+                    {
+                        turn.CompactionKeepN = keepN;
+                    }
+                    else
+                    {
+                        turn.CompactionKeepN = GetMinKeepMessagesFromConfig();
+                    }
+                    string compactionMessages = ExtractLastJsonLine(prepareOutput);
+                    if (string.IsNullOrWhiteSpace(compactionMessages) ||
+                        !compactionMessages.TrimStart().StartsWith("["))
+                    {
+                        Debug.LogError("[UTAgentRunner] needs_compaction 但未返回 compaction messages");
+                        return false;
+                    }
+                    turn.Logger?.LogCompaction("trigger");
+                    PushProgress(turn, "status", "上下文超预算，正在摘要 compaction…");
+                    return StartCompactionRequest(turn, compactionMessages);
+                }
                 messagesArray = ExtractLastJsonLine(prepareOutput);
                 if (string.IsNullOrWhiteSpace(messagesArray) || !messagesArray.TrimStart().StartsWith("["))
                 {
@@ -344,6 +368,56 @@ namespace UTAgent.Editor.Agent
             return StartWebRequest(turn);
         }
 
+        /// <summary>
+        /// 无 tools、非流式摘要请求；完成后 apply 再 PrepareNextRequest。不计 StepCount。
+        /// </summary>
+        private bool StartCompactionRequest(TurnState turn, string compactionMessagesJson)
+        {
+            string baseUrl = (turn.BaseUrl ?? "").Trim();
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                baseUrl = "https://api.openai.com/v1";
+            }
+            if (!baseUrl.EndsWith("/v1"))
+            {
+                baseUrl = baseUrl.TrimEnd('/') + "/v1";
+            }
+            string url = baseUrl + "/chat/completions";
+            turn.Url = url;
+            string deepSeekExtras = BuildDeepSeekRequestExtras(turn.Model);
+            string body = $"{{\"model\":{JsonStr(turn.Model)},\"messages\":{compactionMessagesJson}," +
+                $"\"stream\":false{deepSeekExtras}}}";
+            turn.RequestBody = body;
+            turn.IsCompacting = true;
+            turn.StreamHandler = null;
+            turn.StreamTextBuf.Clear();
+            turn.StreamThinkingBuf.Clear();
+            turn.SseLineBuf.Clear();
+            turn.ToolCallBuf.Clear();
+            turn.Logger?.LogLlmRequest(url, body);
+            try
+            {
+                var req = new UnityWebRequest(url, "POST");
+                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader("Content-Type", "application/json");
+                req.SetRequestHeader("Authorization", $"Bearer {turn.ApiKey}");
+                req.timeout = 120;
+                turn.Request = req;
+                turn.Operation = req.SendWebRequest();
+                EditorApplication.update += Poll;
+                return true;
+            }
+            catch (Exception e)
+            {
+                turn.IsCompacting = false;
+                turn.JustCompacted = true;
+                Debug.LogError($"[UTAgentRunner] compaction HTTP 起请求失败：{e}");
+                turn.Logger?.LogCompaction("fail", "start");
+                return PrepareNextRequest(turn);
+            }
+        }
+
         private bool StartWebRequest(TurnState turn)
         {
             try
@@ -381,10 +455,33 @@ namespace UTAgent.Editor.Agent
             {
                 var turn = mActiveTurns[i];
 
-                if (turn.AbortRequested && turn.StreamHandler == null)
+                if (turn.AbortRequested && turn.StreamHandler == null && !turn.IsCompacting)
                 {
                     mActiveTurns.RemoveAt(i);
                     FinishTurn(turn, "已暂停", false, "aborted");
+                    continue;
+                }
+
+                if (turn.IsCompacting)
+                {
+                    if (turn.AbortRequested)
+                    {
+                        mActiveTurns.RemoveAt(i);
+                        try
+                        {
+                            turn.Request?.Abort();
+                        }
+                        catch
+                        {
+                        }
+                        FinishTurn(turn, "已暂停", false, "aborted");
+                        continue;
+                    }
+                    if (turn.Operation == null || !turn.Operation.isDone)
+                    {
+                        continue;
+                    }
+                    HandleCompactionDone(turn);
                     continue;
                 }
 
@@ -506,6 +603,104 @@ namespace UTAgent.Editor.Agent
             if (!string.IsNullOrEmpty(args))
             {
                 acc.Arguments.Append(args);
+            }
+        }
+
+        private void HandleCompactionDone(TurnState turn)
+        {
+            var req = turn.Operation?.webRequest;
+            try
+            {
+                if (turn.AbortRequested)
+                {
+                    FinishTurn(turn, "已暂停", false, "aborted");
+                    return;
+                }
+                bool hasError = req == null
+                    || req.result == UnityWebRequest.Result.ConnectionError
+                    || req.result == UnityWebRequest.Result.DataProcessingError
+                    || req.result == UnityWebRequest.Result.ProtocolError;
+                string responseBody = req?.downloadHandler?.text ?? "";
+                if (hasError)
+                {
+                    string detail = FormatLlmHttpError(req, turn, responseBody);
+                    Debug.LogWarning($"[UTAgentRunner] compaction 失败，回退静态 trim\n{detail}");
+                    turn.Logger?.LogCompaction("fail", $"http {req?.responseCode}");
+                    turn.IsCompacting = false;
+                    turn.JustCompacted = true;
+                    try
+                    {
+                        req?.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                    turn.Request = null;
+                    turn.Operation = null;
+                    if (!PrepareNextRequest(turn))
+                    {
+                        FinishTurn(turn, "compaction 失败后准备请求失败", true);
+                    }
+                    return;
+                }
+
+                string summary = ExtractCompletionMessageContent(responseBody);
+                try
+                {
+                    req?.Dispose();
+                }
+                catch
+                {
+                }
+                turn.Request = null;
+                turn.Operation = null;
+                turn.IsCompacting = false;
+
+                if (string.IsNullOrWhiteSpace(summary))
+                {
+                    turn.Logger?.LogCompaction("fail", "empty summary");
+                    turn.JustCompacted = true;
+                    if (!PrepareNextRequest(turn))
+                    {
+                        FinishTurn(turn, "compaction 空摘要后准备请求失败", true);
+                    }
+                    return;
+                }
+
+                int keepN = turn.CompactionKeepN > 0
+                    ? turn.CompactionKeepN
+                    : GetMinKeepMessagesFromConfig();
+                string applyOut = SafeExec(ModuleImport +
+                    $"agent.apply_compaction_summary({EscapePy(summary)}, {keepN})\n");
+                if (!ParseExecOk(applyOut, out string applyErr))
+                {
+                    turn.Logger?.LogCompaction("fail", applyErr ?? "apply");
+                    turn.JustCompacted = true;
+                    if (!PrepareNextRequest(turn))
+                    {
+                        FinishTurn(turn, "apply_compaction_summary 失败后准备请求失败", true);
+                    }
+                    return;
+                }
+
+                turn.Logger?.LogCompaction("ok");
+                turn.JustCompacted = true;
+                PushProgress(turn, "status", "上下文摘要完成，继续任务…");
+                if (!PrepareNextRequest(turn))
+                {
+                    FinishTurn(turn, "摘要后准备请求失败（看 Console）", true);
+                }
+            }
+            catch (Exception e)
+            {
+                turn.IsCompacting = false;
+                turn.JustCompacted = true;
+                turn.Logger?.LogCompaction("fail", e.Message);
+                Debug.LogError($"[UTAgentRunner] HandleCompactionDone：{e}");
+                if (!PrepareNextRequest(turn))
+                {
+                    FinishTurn(turn, $"compaction 异常：{e.Message}", true);
+                }
             }
         }
 
@@ -849,17 +1044,19 @@ namespace UTAgent.Editor.Agent
             }
             int pruned = ExtractInt(prepareOutput, "pruned_chars");
             bool emergency = ExtractBool(prepareOutput, "emergency_trim");
+            bool needsCompaction = ExtractBool(prepareOutput, "needs_compaction");
             int reminderInHistory = ExtractInt(prepareOutput, "reminder_in_history");
             int reminderInLlm = ExtractInt(prepareOutput, "reminder_in_llm");
             if (reminderInHistory >= 0 && reminderInLlm >= 0)
             {
                 turn.Logger?.LogLlmPrepare(reminderInHistory, reminderInLlm);
             }
-            if (pruned > 0 || emergency)
+            if (pruned > 0 || emergency || needsCompaction)
             {
                 int tokens = ExtractInt(prepareOutput, "estimated_tokens");
                 Debug.Log(
-                    $"[UTAgentRunner] 历史裁剪 pruned_chars={pruned} emergency_trim={emergency} estimated_tokens={tokens}");
+                    $"[UTAgentRunner] 历史裁剪 pruned_chars={pruned} emergency_trim={emergency} " +
+                    $"needs_compaction={needsCompaction} estimated_tokens={tokens}");
             }
         }
 
@@ -964,6 +1161,9 @@ namespace UTAgent.Editor.Agent
             public bool IsFirst = true;
             public bool IsContinue;
             public bool IsFinalSummaryStep;
+            public bool IsCompacting;
+            public bool JustCompacted;
+            public int CompactionKeepN;
             public int StepCount;
             public int MaxSteps;
             public UTAgentSessionLogger Logger;

@@ -30,13 +30,14 @@ namespace UTAgent.Editor.Config
     }
 
     [Serializable]
-    public sealed class LlmDto
-    {
-        public string providerId = "deepseek";
-        public string modelId = "deepseek-v4-flash";
-        public int maxSteps = 25;
-        public string baseUrlOverride = "";
-    }
+        public sealed class LlmDto
+        {
+            public string providerId = "deepseek";
+            public string modelId = "deepseek-v4-flash";
+            public int maxSteps = 25;
+            public string baseUrlOverride = "";
+            public bool compactionEnabled = true;
+        }
 
     [Serializable]
     public sealed class PythonDto

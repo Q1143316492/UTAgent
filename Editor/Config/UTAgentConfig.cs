@@ -58,8 +58,22 @@ namespace UTAgent.Editor.Config
                 defaults = CreateBuiltinDefaults();
             }
 
-            UTAgentConfigDto local = ReadJsonFile(LocalPath);
-            mCurrent = Merge(defaults, local);
+            string localRaw = "";
+            UTAgentConfigDto local = null;
+            if (File.Exists(LocalPath))
+            {
+                try
+                {
+                    localRaw = File.ReadAllText(LocalPath) ?? "";
+                    local = JsonUtility.FromJson<UTAgentConfigDto>(localRaw);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[UTAgentConfig] 读取 local 失败：{e.Message}");
+                }
+            }
+
+            mCurrent = Merge(defaults, local, localRaw);
             NormalizeCurrent(mCurrent);
             mLoaded = true;
         }
@@ -258,6 +272,14 @@ namespace UTAgent.Editor.Config
         }
 
         /// <summary>
+        /// 是否启用 LLM 摘要 compaction（超 token 预算时）；关闭则直接静态 emergency trim。
+        /// </summary>
+        public static bool ResolveCompactionEnabled()
+        {
+            return Current.llm == null || Current.llm.compactionEnabled;
+        }
+
+        /// <summary>
         /// 已废弃：运行时只认包内 PythonHome，忽略 json 中的 <c>python.home</c>。
         /// </summary>
         public static string ResolvePythonHomeFromConfig()
@@ -337,7 +359,10 @@ namespace UTAgent.Editor.Config
             }
         }
 
-        private static UTAgentConfigDto Merge(UTAgentConfigDto defaults, UTAgentConfigDto local)
+        private static UTAgentConfigDto Merge(
+            UTAgentConfigDto defaults,
+            UTAgentConfigDto local,
+            string localRaw = "")
         {
             var merged = CloneRoot(defaults);
             if (local == null)
@@ -352,7 +377,7 @@ namespace UTAgent.Editor.Config
 
             if (local.llm != null)
             {
-                MergeLlm(merged.llm, local.llm);
+                MergeLlm(merged.llm, local.llm, localRaw);
             }
 
             if (local.python != null)
@@ -458,6 +483,7 @@ namespace UTAgent.Editor.Config
                 modelId = source.modelId,
                 maxSteps = source.maxSteps,
                 baseUrlOverride = source.baseUrlOverride,
+                compactionEnabled = source.compactionEnabled,
             };
         }
 
@@ -502,7 +528,7 @@ namespace UTAgent.Editor.Config
             };
         }
 
-        private static void MergeLlm(LlmDto target, LlmDto local)
+        private static void MergeLlm(LlmDto target, LlmDto local, string localRaw = "")
         {
             if (!string.IsNullOrWhiteSpace(local.providerId))
             {
@@ -522,6 +548,13 @@ namespace UTAgent.Editor.Config
             if (local.baseUrlOverride != null)
             {
                 target.baseUrlOverride = local.baseUrlOverride;
+            }
+
+            // JsonUtility 缺字段时 bool=false；仅 local 显式写出 compactionEnabled 时覆盖
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"compactionEnabled\"", StringComparison.Ordinal) >= 0)
+            {
+                target.compactionEnabled = local.compactionEnabled;
             }
         }
 

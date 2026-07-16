@@ -245,6 +245,25 @@ namespace UTAgent.Editor.Agent
             return "";
         }
 
+        /// <summary>
+        /// 非流式 chat.completions 响应中的 assistant content。
+        /// </summary>
+        private static string ExtractCompletionMessageContent(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return "";
+            }
+
+            int msgIdx = json.IndexOf("\"message\"", StringComparison.Ordinal);
+            if (msgIdx < 0)
+            {
+                return "";
+            }
+
+            return UTAgentJsonExtract.GetString(json.Substring(msgIdx), "content");
+        }
+
         private static string ExtractString(string json, string key)
         {
             return UTAgentJsonExtract.GetString(json, key);
