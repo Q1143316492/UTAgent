@@ -8,11 +8,13 @@
             "models": [
                 {
                     "id": "deepseek-v4-flash",
-                    "displayName": "V4 Flash"
+                    "displayName": "V4 Flash",
+                    "contextWindow": 1000000
                 },
                 {
                     "id": "deepseek-v4-pro",
-                    "displayName": "V4 Pro"
+                    "displayName": "V4 Pro",
+                    "contextWindow": 1000000
                 }
             ]
         }
@@ -22,7 +24,9 @@
         "modelId": "deepseek-v4-flash",
         "maxSteps": 50,
         "baseUrlOverride": "",
-        "compactionEnabled": true
+        "compactionEnabled": true,
+        "compactionInputPercent": 75,
+        "maxInputTokensOverride": 0
     },
     "python": {
         "home": "",

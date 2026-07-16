@@ -110,6 +110,8 @@ namespace UTAgent.Editor.Core
 
         public static int GetAgentMaxInputTokens()
         {
+            // 运行时压缩预算已改走 UTAgentConfig.ResolveMaxInputTokens()（按模型 contextWindow）。
+            // 本 Prefs 仅作遗留兼容，不再被 Runner 读取。
             return EditorPrefs.GetInt(AgentMaxInputTokensKey, DefaultMaxInputTokens);
         }
 

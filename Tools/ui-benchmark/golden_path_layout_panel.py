@@ -27,6 +27,10 @@ def create_layout_panel(feature, title_text):
     vlg.spacing = 16
     vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
     vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
+    vlg.childControlWidth = True
+    vlg.childControlHeight = True
+    vlg.childForceExpandWidth = True
+    vlg.childForceExpandHeight = False
     body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
     body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)

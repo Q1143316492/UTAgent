@@ -30,6 +30,16 @@ namespace UTAgent.Editor.Agent
             RegexOptions.Compiled);
         // 单步代码体积上限（防 ReAct 雪球长脚本）
         private const int kCodeSizeLimit = 4000;
+        // LayoutGroup 创建：须同段设置 childControlWidth/Height（防零宽塌陷）
+        private static readonly Regex sAddLayoutGroup = new Regex(
+            @"AddComponent\([^)]*(?:Vertical|Horizontal|Grid)?LayoutGroup",
+            RegexOptions.Compiled);
+        private static readonly Regex sChildControlWidth = new Regex(
+            @"childControlWidth\s*=",
+            RegexOptions.Compiled);
+        private static readonly Regex sChildControlHeight = new Regex(
+            @"childControlHeight\s*=",
+            RegexOptions.Compiled);
 
         /// <summary>
         /// exec 前置域校验：UI 域 exec 未 load 对应 skill 时拦截，注入 user 提醒。
@@ -57,6 +67,18 @@ namespace UTAgent.Editor.Agent
                 InjectReminder(turn, "禁止全量反射 GetComponents(typeof(Component))，用 describe_go 或指定具体类型（如 GetComponents(Image)）。");
                 LogBeforeExec(turn, "heavy-reflection", "-", "inject reminder");
                 return false;
+            }
+
+            // LayoutGroup 四布尔：AddComponent Layout 后同段须设 childControlWidth/Height
+            if (sAddLayoutGroup.IsMatch(code))
+            {
+                if (!sChildControlWidth.IsMatch(code) || !sChildControlHeight.IsMatch(code))
+                {
+                    InjectReminder(turn,
+                        "AddComponent(LayoutGroup) 后必须同段设置 childControlWidth=True 与 childControlHeight=True（否则子节点易宽高为 0）。见 editor-ui LayoutGroup 硬规则。");
+                    LogBeforeExec(turn, "layout-control", "-", "inject reminder");
+                    return false;
+                }
             }
 
             // 排查域优先：describe_go 要求 editor-ui-debug

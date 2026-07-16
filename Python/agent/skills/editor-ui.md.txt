@@ -20,6 +20,24 @@ Editor 拼/改 Canvas UI、布局、预制体。
 
 L1 居中卡片（默认）· L2 顶栏+内容 · L3 底栏按钮行 · L4 表单单列 · L5 工具条。`spacing=16` `padding=24`。双按钮用 L1+L3。
 
+### LayoutGroup 硬规则（违反必出宽高为 0）
+
+Unity 默认：`childForceExpand*=true` 且常 `childControl*=false`。此时子节点若 `sizeDelta.x=0` 且 `LayoutElement.preferredWidth<0`，**宽度塌成 0**（输入框竖条字）。
+
+`AddComponent(VerticalLayoutGroup/HorizontalLayoutGroup)` 后 **必须立刻**写：
+
+```python
+lg.childControlWidth = True
+lg.childControlHeight = True
+lg.childForceExpandWidth = True   # 表单行拉满宽；按钮行也可 True
+lg.childForceExpandHeight = False
+```
+
+- 控尺寸：**只**用 `LayoutElement.preferredWidth/Height`（或 `add_to_layout(..., preferred_w=, preferred_h=)`），**禁止**在 Layout 子节点上手改 `sizeDelta` 指望生效
+- 可拉伸行（输入框底）：`preferredWidth` 可省略，但 **`preferredHeight` 必须 >0**；禁止只设 height、width 仍为 0 的 `sizeDelta`
+- 固定宽子项（按钮）：`preferred_w` 与 `preferred_h` **都要给**
+- 拼完后 MUST `print` 关键子节点 `rect.width/height`，任一 `w<=1` 或 `h<=1` → 立刻修，禁止当完成
+
 ## 配色
 
 Surface / TextPrimary / Accent / Neutral；≥3 档；禁止全同色；`print` color 自查。
@@ -30,7 +48,7 @@ Surface / TextPrimary / Accent / Neutral；≥3 档；禁止全同色；`print` 
 
 ## 创建 golden-path
 
-`loadSkill` 后复制下方代码块到 `execPython`，**只改参数区**。4 个原语：`create_tmp_button` / `create_layout_panel`（单层新建）· `add_to_layout` / `add_free_child`（多层挂子）。
+`loadSkill` 后复制下方代码块到 `execPython`，**只改参数区**。5 个原语：`create_tmp_button` / `create_layout_panel` / `create_tmp_input_field`（新建）· `add_to_layout` / `add_free_child`（多层挂子）。
 
 ### #1 `create_tmp_button`
 
@@ -105,6 +123,10 @@ def create_layout_panel(feature, title_text):
     vlg.spacing = 16
     vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
     vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
+    vlg.childControlWidth = True
+    vlg.childControlHeight = True
+    vlg.childForceExpandWidth = True
+    vlg.childForceExpandHeight = False
     body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
     body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
@@ -149,9 +171,90 @@ title_text = "Demo Panel"
 print(json.dumps(create_layout_panel(feature, title_text), ensure_ascii=False))
 ```
 
-### #3 `add_to_layout`
+### #3 `create_tmp_input_field`
 
-挂**已存在**的 child 到 parent（须含 `LayoutGroup`）下。**不碰 child 的 anchor/sizeDelta**——LayoutGroup 自动管；要控尺寸传 `preferred_w/h`（设 `LayoutElement`）。先建后挂。
+在已有 `LayoutGroup` 父（默认 `GrpBody`）下创建 `Input{Purpose}`。根挂 `LayoutElement.preferredHeight`（默认 40），**禁止**只靠 `sizeDelta.x=0` 指望获得宽度。内部 Bg/TextArea 用 stretch。先确保父已存在（如先跑 `#2`）。
+
+```python
+import json
+import unity
+from unity_bind import CS
+
+def create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="GrpBody", preferred_h=40):
+    input_name = f"Input{purpose}"
+    unity.prepare_scene_object(input_name)
+    parent = CS.UnityEngine.GameObject.Find(parent_name)
+    if parent is None:
+        raise RuntimeError(f"parent not found: {parent_name}")
+    inp = CS.UnityEngine.GameObject(input_name)
+    inp.transform.SetParent(parent.transform, False)
+    inp.AddComponent(CS.TMPro.TMP_InputField)
+    le = inp.AddComponent(CS.UnityEngine.UI.LayoutElement)
+    le.preferredHeight = preferred_h
+    bg = CS.UnityEngine.GameObject("Bg")
+    bg.transform.SetParent(inp.transform, False)
+    bg.AddComponent(CS.UnityEngine.UI.Image).color = CS.UnityEngine.Color(0.22, 0.22, 0.26, 1)
+    bg_rt = bg.GetComponent(CS.UnityEngine.RectTransform)
+    bg_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
+    bg_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
+    bg_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
+    bg_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
+    ta = CS.UnityEngine.GameObject("TextArea")
+    ta.transform.SetParent(inp.transform, False)
+    ta_rt = ta.AddComponent(CS.UnityEngine.RectTransform)
+    ta_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
+    ta_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
+    ta_rt.offsetMin = CS.UnityEngine.Vector2(8, 4)
+    ta_rt.offsetMax = CS.UnityEngine.Vector2(-8, -4)
+    ph = CS.UnityEngine.GameObject("Placeholder")
+    ph.transform.SetParent(ta.transform, False)
+    ph_tmp = ph.AddComponent(CS.TMPro.TextMeshProUGUI)
+    ph_tmp.text = placeholder_text
+    ph_tmp.fontSize = 16
+    ph_tmp.color = CS.UnityEngine.Color(0.6, 0.6, 0.6, 1)
+    ph_rt = ph.GetComponent(CS.UnityEngine.RectTransform)
+    ph_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
+    ph_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
+    ph_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
+    ph_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
+    tx = CS.UnityEngine.GameObject("Text")
+    tx.transform.SetParent(ta.transform, False)
+    tx_tmp = tx.AddComponent(CS.TMPro.TextMeshProUGUI)
+    tx_tmp.text = ""
+    tx_tmp.fontSize = 16
+    tx_tmp.color = CS.UnityEngine.Color(0.95, 0.95, 0.95, 1)
+    tx_rt = tx.GetComponent(CS.UnityEngine.RectTransform)
+    tx_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
+    tx_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
+    tx_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
+    tx_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
+    field = inp.GetComponent(CS.TMPro.TMP_InputField)
+    field.textViewport = ta_rt
+    field.textComponent = tx_tmp
+    field.placeholder = ph_tmp
+    field.targetGraphic = bg.GetComponent(CS.UnityEngine.UI.Image)
+    if password:
+        field.contentType = CS.TMPro.TMP_InputField.ContentType.Password
+    CS.UnityEngine.Canvas.ForceUpdateCanvases()
+    rt = inp.GetComponent(CS.UnityEngine.RectTransform)
+    return {
+        "input_name": input_name,
+        "has_tmp_input": field is not None,
+        "preferred_h": le.preferredHeight,
+        "rect_w": round(float(rt.rect.width), 1),
+        "rect_h": round(float(rt.rect.height), 1),
+    }
+
+purpose = "Account"
+placeholder_text = "账号"
+password = False
+parent_name = "GrpBody"
+print(json.dumps(create_tmp_input_field(purpose, placeholder_text, password, parent_name), ensure_ascii=False))
+```
+
+### #4 `add_to_layout`
+
+挂**已存在**的 child 到 parent（须含 `LayoutGroup`）下。**不碰 child 的 anchor/sizeDelta**——LayoutGroup 自动管；要控尺寸传 `preferred_w/h`（设 `LayoutElement`）。先建后挂。固定尺寸（按钮）**必须同时传** `preferred_w`+`preferred_h`；仅高度行传 `preferred_h`，宽靠父级 expand。
 
 ```python
 import json
@@ -184,7 +287,7 @@ child_name = "TxtTitle"
 print(json.dumps(add_to_layout(parent_name, child_name), ensure_ascii=False))
 ```
 
-### #4 `add_free_child`
+### #5 `add_free_child`
 
 自由定位**已存在**的 child（不参与 `LayoutGroup`）。用于角落按钮、悬浮角标、装饰。先建后挂。
 
@@ -223,9 +326,10 @@ print(json.dumps(add_free_child(parent_name, child_name, anchor_min, anchor_max,
 
 ## 布局模式选择
 
-- **多元素自动排列**（按钮行、表单列、设置项列表）→ 建 `LayoutGroup` 容器（raw `AddComponent(VerticalLayoutGroup/HorizontalLayoutGroup)` + `spacing`/`padding`）+ `add_to_layout` 挂子
+- **多元素自动排列**（按钮行、表单列、设置项列表）→ 建 `LayoutGroup` 容器（raw `AddComponent` + **硬规则四布尔** + `spacing`/`padding`）+ `add_to_layout` 挂子
 - **单元素/角落/悬浮**（退出按钮、角标、装饰）→ `add_free_child` 自由定位，**不建容器**
-- **LayoutGroup 容器内禁止手动设子元素 `anchorMin/anchorMax/sizeDelta`**——LayoutGroup 自动管；要控尺寸用 `add_to_layout` 的 `preferred_w/h`
+- **LayoutGroup 容器内禁止手动设子元素 `anchorMin/anchorMax/sizeDelta`**——LayoutGroup 自动管；要控尺寸用 `preferred_w/h`
+- **禁止**依赖 Unity Layout 默认值（默认易把子宽压成 0）
 
 ## 改已有 UI
 

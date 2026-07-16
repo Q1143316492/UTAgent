@@ -18,6 +18,10 @@ namespace UTAgent.Editor.Config
         public const string DefaultPythonDll = "python312.dll";
         public const int DefaultBridgePort = 17861;
         public const int DefaultMaxSteps = 25;
+        public const int DefaultDeepSeekContextWindow = 1000000;
+        public const int DefaultGenericContextWindow = 200000;
+        public const int DefaultCompactionInputPercent = 75;
+        public const int MinInputTokenBudget = 8000;
 
         private static UTAgentConfigDto mCurrent;
         private static bool mLoaded;
@@ -280,6 +284,88 @@ namespace UTAgent.Editor.Config
         }
 
         /// <summary>
+        /// 当前模型上下文窗口（tokens）。优先 model.contextWindow；否则启发式（deepseek→1M，其它→200k）。
+        /// </summary>
+        public static int ResolveContextWindow()
+        {
+            string modelId = ResolveModelId();
+            string providerId = Current.llm?.providerId;
+            ModelDto model = FindModel(providerId, modelId);
+            if (model != null && model.contextWindow > 0)
+            {
+                return model.contextWindow;
+            }
+
+            return InferContextWindow(modelId, providerId);
+        }
+
+        /// <summary>
+        /// compaction 触发用的 input token 预算（发给 prepare 的 max_input_tokens）。
+        /// 优先 <c>llm.maxInputTokensOverride</c>；否则 <c>contextWindow × compactionInputPercent%</c>（默认 75%）。
+        /// </summary>
+        public static int ResolveMaxInputTokens()
+        {
+            LlmDto llm = Current.llm;
+            if (llm != null && llm.maxInputTokensOverride > 0)
+            {
+                return llm.maxInputTokensOverride;
+            }
+
+            int window = ResolveContextWindow();
+            int percent = llm?.compactionInputPercent ?? 0;
+            if (percent <= 0 || percent > 100)
+            {
+                percent = DefaultCompactionInputPercent;
+            }
+
+            long budget = (long)window * percent / 100L;
+            if (budget < MinInputTokenBudget)
+            {
+                budget = MinInputTokenBudget;
+            }
+
+            if (budget > int.MaxValue)
+            {
+                return int.MaxValue;
+            }
+
+            return (int)budget;
+        }
+
+        public static ModelDto FindModel(string providerId, string modelId)
+        {
+            if (string.IsNullOrWhiteSpace(modelId))
+            {
+                return null;
+            }
+
+            ModelDto[] models = GetModelsForProvider(providerId);
+            for (int i = 0; i < models.Length; i++)
+            {
+                ModelDto m = models[i];
+                if (m != null && string.Equals(m.id, modelId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return m;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>无配置时的上下文窗口启发式。</summary>
+        public static int InferContextWindow(string modelId, string providerId)
+        {
+            string m = (modelId ?? "").Trim().ToLowerInvariant();
+            string p = (providerId ?? "").Trim().ToLowerInvariant();
+            if (m.Contains("deepseek") || p.Contains("deepseek"))
+            {
+                return DefaultDeepSeekContextWindow;
+            }
+
+            return DefaultGenericContextWindow;
+        }
+
+        /// <summary>
         /// 已废弃：运行时只认包内 PythonHome，忽略 json 中的 <c>python.home</c>。
         /// </summary>
         public static string ResolvePythonHomeFromConfig()
@@ -445,8 +531,18 @@ namespace UTAgent.Editor.Config
                         baseUrl = "https://api.deepseek.com",
                         models = new[]
                         {
-                            new ModelDto { id = "deepseek-v4-flash", displayName = "V4 Flash" },
-                            new ModelDto { id = "deepseek-v4-pro", displayName = "V4 Pro" },
+                            new ModelDto
+                            {
+                                id = "deepseek-v4-flash",
+                                displayName = "V4 Flash",
+                                contextWindow = DefaultDeepSeekContextWindow,
+                            },
+                            new ModelDto
+                            {
+                                id = "deepseek-v4-pro",
+                                displayName = "V4 Pro",
+                                contextWindow = DefaultDeepSeekContextWindow,
+                            },
                         },
                     },
                 },
@@ -484,6 +580,8 @@ namespace UTAgent.Editor.Config
                 maxSteps = source.maxSteps,
                 baseUrlOverride = source.baseUrlOverride,
                 compactionEnabled = source.compactionEnabled,
+                compactionInputPercent = source.compactionInputPercent,
+                maxInputTokensOverride = source.maxInputTokensOverride,
             };
         }
 
@@ -555,6 +653,20 @@ namespace UTAgent.Editor.Config
                 localRaw.IndexOf("\"compactionEnabled\"", StringComparison.Ordinal) >= 0)
             {
                 target.compactionEnabled = local.compactionEnabled;
+            }
+
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"compactionInputPercent\"", StringComparison.Ordinal) >= 0 &&
+                local.compactionInputPercent > 0)
+            {
+                target.compactionInputPercent = local.compactionInputPercent;
+            }
+
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"maxInputTokensOverride\"", StringComparison.Ordinal) >= 0 &&
+                local.maxInputTokensOverride > 0)
+            {
+                target.maxInputTokensOverride = local.maxInputTokensOverride;
             }
         }
 

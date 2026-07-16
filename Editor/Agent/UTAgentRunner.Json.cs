@@ -358,7 +358,7 @@ namespace UTAgent.Editor.Agent
 
         private static int GetMaxInputTokensFromConfig()
         {
-            return UTAgentPrefs.GetAgentMaxInputTokens();
+            return UTAgentConfig.ResolveMaxInputTokens();
         }
 
         private static int GetMinKeepMessagesFromConfig()

@@ -134,6 +134,15 @@ if ($j) {
     Add-Result -Id "E11" -Ok ($j.ok -eq $true) -Detail "kind=$($j.compaction_kind_present) llm=$($j.compaction_in_llm) needs=$($j.needs_compaction)"
 } else { Add-Result -Id "E11" -Ok $false -Detail "parse fail" }
 
+# E12 Layout 零宽（面板 + 输入框）
+$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_layout_zero_width_e12.py"))
+$j = Get-JsonLine -Text $out
+if ($j) {
+    $v = $j.zero_width_violations
+    $vc = if ($null -eq $v) { 0 } else { @($v).Count }
+    Add-Result -Id "E12" -Ok ($j.ok -eq $true) -Detail "violations=$vc root=$($j.root_name)"
+} else { Add-Result -Id "E12" -Ok $false -Detail "parse fail" }
+
 # ---- Step 3: L2 行为用例（可选） ----
 if ($L2 -and -not $L1Only) {
     Write-Host "[3/4] L2 行为用例 (utagent chat)..."
