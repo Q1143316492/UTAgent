@@ -163,6 +163,13 @@ namespace UTAgent.Editor.Agent
                 normal = { textColor = dark ? new Color(1f, 0.55f, 0.50f) : new Color(0.75f, 0.15f, 0.12f) },
                 padding = new RectOffset(8, 8, 4, 4),
             };
+
+            mInputStyle = new GUIStyle(EditorStyles.textArea)
+            {
+                wordWrap = true,
+                fontSize = 13,
+                padding = new RectOffset(6, 6, 6, 6),
+            };
         }
 
         private void DrawMessage(ChatMessage msg, int idx)

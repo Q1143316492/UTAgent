@@ -27,6 +27,11 @@ namespace UTAgent.Editor.Agent
         private readonly UTAgentChatScroll mMessageScroll = new UTAgentChatScroll();
         private readonly List<ChatMessage> mMessages = new List<ChatMessage>();
         private string mInput = "";
+        private Vector2 mInputScroll;
+        private readonly List<string> mInputUndoStack = new List<string>();
+        private int mInputUndoIndex = -1;
+        private bool mInputFieldActive;
+        private bool mSuppressInputCommit;
         private bool mWaiting;
         private int mProgressIndex = -1;
 
@@ -49,6 +54,7 @@ namespace UTAgent.Editor.Agent
         private Texture2D mAgentBubbleTex;
         private Texture2D mCopyBtnNormalTex;
         private Texture2D mCopyBtnHoverTex;
+        private GUIStyle mInputStyle;
         private bool mWasProSkin;
 
         private const string InputControlName = "UTAgentChatInput";
@@ -66,6 +72,7 @@ namespace UTAgent.Editor.Agent
         {
             mStylesInit = false;
             mMessageScroll.Reset();
+            ResetInputUndoState(mInput);
             EndWaitingTurn();
             UTAgentConfig.PrepareForChat();
             if (UTAgentBootstrap.IsAvailable)
@@ -129,11 +136,15 @@ namespace UTAgent.Editor.Agent
                 mStylesInit = true;
                 mWasProSkin = EditorGUIUtility.isProSkin;
             }
+
+            // 尽早拦截 Undo，避免被 Unity 全局撤销抢走；且须在 TextArea 之前改好 mInput
+            bool didUndoRedo = TryHandleInputUndoRedo();
+
             DrawHeader();
 
             DrawMessageList();
             EditorGUILayout.Space(4);
-            DrawInputArea();
+            DrawInputArea(didUndoRedo);
         }
 
         private void DrawMessageList()
@@ -153,7 +164,7 @@ namespace UTAgent.Editor.Agent
             GUILayout.Space(40);
         }
 
-        private void DrawInputArea()
+        private void DrawInputArea(bool didUndoRedo)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             if (!string.IsNullOrEmpty(mAttachedImagePath))
@@ -165,33 +176,116 @@ namespace UTAgent.Editor.Agent
                 if (GUILayout.Button("×", GUILayout.Width(22))) { ClearAttached(); Repaint(); }
                 EditorGUILayout.EndHorizontal();
             }
+
+            Event evt = Event.current;
+            bool submitChord = evt.type == EventType.KeyDown
+                && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                && (evt.control || evt.command);
+            if (submitChord
+                && mInputFieldActive
+                && !mWaiting
+                && !string.IsNullOrWhiteSpace(mInput))
+            {
+                evt.Use();
+                Send(mInput);
+                GUIUtility.ExitGUI();
+            }
+
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("📎", GUILayout.Width(32))) OpenImageBrowser();
-            bool enter = Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return && !Event.current.shift;
+            if (GUILayout.Button("📎", GUILayout.Width(32), GUILayout.Height(32)))
+            {
+                OpenImageBrowser();
+            }
+
+            float inputWidth = Mathf.Max(80f, position.width - 32f - 56f - 48f);
+            string measure = string.IsNullOrEmpty(mInput) ? " " : mInput;
+            float contentHeight = Mathf.Max(54f, mInputStyle.CalcHeight(new GUIContent(measure), inputWidth - 8f));
+            const float maxViewport = 160f;
+            bool needsScroll = contentHeight > maxViewport + 0.5f;
+            float viewportHeight = needsScroll ? maxViewport : contentHeight;
+
+            if (didUndoRedo)
+            {
+                // 打断 IMGUI TextEditor，否则会继续吐出撤销前的文本把 mInput 盖回去
+                EditorGUIUtility.editingTextField = false;
+            }
+
             GUI.SetNextControlName(InputControlName);
-            mInput = EditorGUILayout.TextArea(mInput, GUILayout.MinHeight(36), GUILayout.ExpandHeight(false));
+            string nextInput;
+            if (needsScroll)
+            {
+                mInputScroll = EditorGUILayout.BeginScrollView(
+                    mInputScroll,
+                    false,
+                    true,
+                    GUILayout.Height(viewportHeight),
+                    GUILayout.ExpandWidth(true));
+                nextInput = EditorGUILayout.TextArea(
+                    mInput,
+                    mInputStyle,
+                    GUILayout.Height(contentHeight),
+                    GUILayout.ExpandWidth(true));
+                EditorGUILayout.EndScrollView();
+            }
+            else
+            {
+                mInputScroll = Vector2.zero;
+                nextInput = EditorGUILayout.TextArea(
+                    mInput,
+                    mInputStyle,
+                    GUILayout.Height(contentHeight),
+                    GUILayout.ExpandWidth(true));
+            }
+
+            if (GUI.GetNameOfFocusedControl() == InputControlName)
+            {
+                mInputFieldActive = true;
+            }
+            else if (evt.type == EventType.MouseDown)
+            {
+                mInputFieldActive = false;
+            }
+
+            if (didUndoRedo || mSuppressInputCommit)
+            {
+                mSuppressInputCommit = false;
+                GUI.FocusControl(InputControlName);
+                mInputFieldActive = true;
+            }
+            else
+            {
+                CommitInputText(nextInput);
+                // 名称焦点偶发对不上时，只要文本在变就视为输入框活跃
+                if (nextInput != null && GUI.GetNameOfFocusedControl() == InputControlName)
+                {
+                    mInputFieldActive = true;
+                }
+            }
+
+            EditorGUILayout.BeginVertical(GUILayout.Width(56));
             if (mWaiting)
             {
-                if (GUILayout.Button("Stop", GUILayout.Width(56)))
+                if (GUILayout.Button("Stop", GUILayout.Height(24)))
                 {
                     mRunner.Abort();
                     EditorApplication.delayCall -= OnAbortSafetyReset;
                     EditorApplication.delayCall += OnAbortSafetyReset;
                 }
             }
-            else
+            else if (CanContinueFromLastMessage() && GUILayout.Button("续跑", GUILayout.Height(24)))
             {
-                if (CanContinueFromLastMessage() && GUILayout.Button("续跑", GUILayout.Width(56)))
-                {
-                    RunContinue();
-                }
-                else if (GUILayout.Button("Send", GUILayout.Width(56)))
-                {
-                    Send(mInput);
-                }
+                RunContinue();
             }
+            else if (GUILayout.Button("Send", GUILayout.Height(24)))
+            {
+                Send(mInput);
+            }
+
+            EditorGUILayout.EndVertical();
             EditorGUILayout.EndHorizontal();
+
             EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Ctrl+Enter 发送", EditorStyles.miniLabel);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Clear", GUILayout.Width(56)))
             {
@@ -205,13 +299,160 @@ namespace UTAgent.Editor.Agent
                     Repaint();
                 }
             }
+
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
-            if (enter && !mWaiting && !string.IsNullOrWhiteSpace(mInput))
+        }
+
+        /// <summary>
+        /// 输入框聚焦时拦截 Undo/Redo，避免落到 Unity 全局撤销；并维护本地输入历史。
+        /// </summary>
+        private bool TryHandleInputUndoRedo()
+        {
+            if (focusedWindow != this)
             {
-                Send(mInput);
-                GUIUtility.ExitGUI();
+                return false;
             }
+
+            if (!mInputFieldActive && GUI.GetNameOfFocusedControl() != InputControlName)
+            {
+                return false;
+            }
+
+            Event evt = Event.current;
+            bool isUndo = false;
+            bool isRedo = false;
+
+            if (evt.type == EventType.ValidateCommand
+                && (evt.commandName == "Undo" || evt.commandName == "Redo"))
+            {
+                evt.Use();
+                return false;
+            }
+
+            if (evt.type == EventType.ExecuteCommand)
+            {
+                isUndo = evt.commandName == "Undo";
+                isRedo = evt.commandName == "Redo";
+            }
+            else if (evt.type == EventType.KeyDown && (evt.control || evt.command) && !evt.alt)
+            {
+                if (evt.keyCode == KeyCode.Z && !evt.shift)
+                {
+                    isUndo = true;
+                }
+                else if (evt.keyCode == KeyCode.Y || (evt.keyCode == KeyCode.Z && evt.shift))
+                {
+                    isRedo = true;
+                }
+            }
+
+            if (!isUndo && !isRedo)
+            {
+                return false;
+            }
+
+            evt.Use();
+            if (isUndo)
+            {
+                ApplyInputUndo();
+            }
+            else
+            {
+                ApplyInputRedo();
+            }
+
+            mSuppressInputCommit = true;
+            return true;
+        }
+
+        private void CommitInputText(string next)
+        {
+            next ??= "";
+            bool hadTab = next.IndexOf('\t') >= 0;
+            next = next.Replace("\t", "    ");
+            if (next == mInput)
+            {
+                return;
+            }
+
+            if (mInputUndoIndex < mInputUndoStack.Count - 1)
+            {
+                mInputUndoStack.RemoveRange(
+                    mInputUndoIndex + 1,
+                    mInputUndoStack.Count - mInputUndoIndex - 1);
+            }
+
+            if (mInputUndoStack.Count == 0)
+            {
+                mInputUndoStack.Add(mInput ?? "");
+                mInputUndoIndex = 0;
+            }
+
+            mInputUndoStack.Add(next);
+            mInputUndoIndex = mInputUndoStack.Count - 1;
+            const int maxSteps = 80;
+            if (mInputUndoStack.Count > maxSteps)
+            {
+                int remove = mInputUndoStack.Count - maxSteps;
+                mInputUndoStack.RemoveRange(0, remove);
+                mInputUndoIndex -= remove;
+            }
+
+            mInput = next;
+            mInputFieldActive = true;
+            if (hadTab)
+            {
+                // Tab 已换成空格，打断 TextEditor 以免下一帧又带出 \t
+                EditorGUIUtility.editingTextField = false;
+            }
+        }
+
+        private void ApplyInputUndo()
+        {
+            if (mInputUndoStack.Count == 0)
+            {
+                mInputUndoStack.Add(mInput ?? "");
+                mInputUndoIndex = 0;
+                return;
+            }
+
+            if (mInputUndoIndex == mInputUndoStack.Count - 1
+                && mInputUndoStack[mInputUndoIndex] != (mInput ?? ""))
+            {
+                CommitInputText(mInput);
+            }
+
+            if (mInputUndoIndex <= 0)
+            {
+                mInput = mInputUndoStack[0];
+                mInputUndoIndex = 0;
+                return;
+            }
+
+            mInputUndoIndex--;
+            mInput = mInputUndoStack[mInputUndoIndex];
+        }
+
+        private void ApplyInputRedo()
+        {
+            if (mInputUndoIndex < 0 || mInputUndoIndex >= mInputUndoStack.Count - 1)
+            {
+                return;
+            }
+
+            mInputUndoIndex++;
+            mInput = mInputUndoStack[mInputUndoIndex];
+        }
+
+        private void ResetInputUndoState(string text)
+        {
+            mInput = text ?? "";
+            mInputUndoStack.Clear();
+            mInputUndoStack.Add(mInput);
+            mInputUndoIndex = 0;
+            mInputScroll = Vector2.zero;
+            mSuppressInputCommit = false;
         }
 
         private void Send(string text)
@@ -239,7 +480,7 @@ namespace UTAgent.Editor.Agent
             string img = mAttachedImagePath;
             mMessageScroll.OnSend();
             AddMessage(text, true);
-            mInput = "";
+            ResetInputUndoState("");
             RunTurn(text, img);
             ClearAttached();
             Repaint();
@@ -269,7 +510,7 @@ namespace UTAgent.Editor.Agent
                 return false;
             }
 
-            mInput = "";
+            ResetInputUndoState("");
             mMessageScroll.OnSend();
             RunContinue();
             Repaint();
