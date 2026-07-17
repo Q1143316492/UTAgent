@@ -30,7 +30,8 @@ namespace UTAgent.Editor.Agent
         {
             return outcome == "error"
                 || outcome == "aborted"
-                || outcome == "max_steps_summary";
+                || outcome == "max_steps_summary"
+                || outcome == "after_tool_terminate";
         }
 
         /// <summary>
@@ -946,6 +947,8 @@ namespace UTAgent.Editor.Agent
                 }
                 string resultContent = ExtractString(execResult, "content");
                 string preview = ExtractString(execResult, "preview");
+                // after-tool：append 前可改写 content / 注入 reminder / 置 terminate（loadSkill 与 before 拦截不走此路径）
+                AfterToolProcess(turn, code, ref resultContent, ref preview);
                 if (!string.IsNullOrEmpty(preview))
                 {
                     PushProgress(turn, "observation", preview);
@@ -964,6 +967,12 @@ namespace UTAgent.Editor.Agent
             }
 
             SafeExec(ModuleImport + "agent.process_pending_images()\n");
+
+            if (turn.TerminateAfterTools)
+            {
+                FinishTurn(turn, "after-tool terminate", false, "after_tool_terminate");
+                return;
+            }
 
             if (!PrepareNextRequest(turn))
             {
@@ -1095,6 +1104,11 @@ namespace UTAgent.Editor.Agent
                 outcome = "max_steps_summary";
                 isError = false;
             }
+            else if (error == "after_tool_terminate")
+            {
+                outcome = "after_tool_terminate";
+                isError = false;
+            }
             else if (error == "max_steps")
             {
                 outcome = "max_steps";
@@ -1166,6 +1180,8 @@ namespace UTAgent.Editor.Agent
             public int CompactionKeepN;
             public int StepCount;
             public int MaxSteps;
+            /// <summary>after-tool 请求：本批 tool 结束后不再自动开下一轮 LLM。</summary>
+            public bool TerminateAfterTools;
             public UTAgentSessionLogger Logger;
 
             public string ApiKey => UTAgentConfig.ResolveApiKey();

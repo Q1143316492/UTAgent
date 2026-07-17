@@ -276,6 +276,20 @@ namespace UTAgent.Editor.Config
         }
 
         /// <summary>
+        /// after-tool 截断烟测阈值（字符）。0 = 禁用。
+        /// </summary>
+        public static int ResolveAfterToolTruncateChars()
+        {
+            int n = Current.llm?.afterToolTruncateChars ?? 0;
+            if (n < 0)
+            {
+                return 0;
+            }
+
+            return n;
+        }
+
+        /// <summary>
         /// 是否启用 LLM 摘要 compaction（超 token 预算时）；关闭则直接静态 emergency trim。
         /// </summary>
         public static bool ResolveCompactionEnabled()
@@ -582,6 +596,7 @@ namespace UTAgent.Editor.Config
                 compactionEnabled = source.compactionEnabled,
                 compactionInputPercent = source.compactionInputPercent,
                 maxInputTokensOverride = source.maxInputTokensOverride,
+                afterToolTruncateChars = source.afterToolTruncateChars,
             };
         }
 
@@ -667,6 +682,15 @@ namespace UTAgent.Editor.Config
                 local.maxInputTokensOverride > 0)
             {
                 target.maxInputTokensOverride = local.maxInputTokensOverride;
+            }
+
+            // 允许 local 显式写 0 关闭；仅当 JSON 含字段时覆盖
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"afterToolTruncateChars\"", StringComparison.Ordinal) >= 0)
+            {
+                target.afterToolTruncateChars = local.afterToolTruncateChars < 0
+                    ? 0
+                    : local.afterToolTruncateChars;
             }
         }
 

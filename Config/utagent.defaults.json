@@ -26,7 +26,8 @@
         "baseUrlOverride": "",
         "compactionEnabled": true,
         "compactionInputPercent": 75,
-        "maxInputTokensOverride": 0
+        "maxInputTokensOverride": 0,
+        "afterToolTruncateChars": 0
     },
     "python": {
         "home": "",

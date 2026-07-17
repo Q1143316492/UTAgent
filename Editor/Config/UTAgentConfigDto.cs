@@ -46,6 +46,10 @@ namespace UTAgent.Editor.Config
         public int compactionInputPercent = 75;
         /// <summary>手动覆盖压缩触发 token 预算；0 表示按 contextWindow × percent 计算。</summary>
         public int maxInputTokensOverride = 0;
+        /// <summary>
+        /// after-tool 截断烟测：tool result content 超过该字符数则截断。0 = 禁用（默认）。
+        /// </summary>
+        public int afterToolTruncateChars = 0;
     }
 
     [Serializable]

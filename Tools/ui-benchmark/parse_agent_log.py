@@ -53,6 +53,7 @@ BENCHMARK_ASSERTS = {
     "C08": ("超长", None, "inject reminder"),  # code-too-long
     "C09": ("GetComponents", None, "inject reminder"),  # heavy-reflection
     "C10": ("WndSettings", None, None),  # 反复守卫后 reminder_in_llm ≤ 1
+    "C11": ("childControl", None, "inject reminder"),  # layout-control
 }
 
 
@@ -204,6 +205,14 @@ def run_assert(parsed, case_id):
     if expected_action is not None:
         found = any(d["action"] == expected_action for d in parsed["before_exec_decisions"])
         detail_parts.append(f"before-exec {expected_action!r}={'found' if found else 'MISSING'}")
+        ok = ok and found
+
+    if case_id == "C11":
+        found = any(
+            d["domain"] == "layout-control" and d["action"] == "inject reminder"
+            for d in parsed["before_exec_decisions"]
+        )
+        detail_parts.append(f"layout-control inject={'found' if found else 'MISSING'}")
         ok = ok and found
 
     if case_id == "C10":
