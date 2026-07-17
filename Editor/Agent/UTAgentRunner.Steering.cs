@@ -56,6 +56,7 @@ namespace UTAgent.Editor.Agent
 
             SafeExec(ModuleImport +
                 $"agent.append_user_message({EscapePy(text.Trim())}, {EscapePy(kind)}, False)\n");
+            PersistHistoryMutation();
         }
 
         private void ClearSteeringQueues()
@@ -100,6 +101,7 @@ namespace UTAgent.Editor.Agent
             PushProgress(turn, "status", $"{logKind}: {preview} → inject");
             SafeExec(ModuleImport +
                 $"agent.append_user_message({EscapePy(text)}, {EscapePy(kind)}, False)\n");
+            PersistHistoryMutation();
         }
     }
 }

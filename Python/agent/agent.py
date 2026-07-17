@@ -42,14 +42,21 @@ from messages import (
     USER,
     convert_to_llm,
     convert_to_llm_with_meta,
+    deepcopy_history,
     history_assistant_message,
     history_tool_message,
     history_user_message,
 )
 from compaction import build_compaction_payload, make_compaction_history_message
+from session_store import (
+    create_empty_session,
+    history_to_ui_messages,
+    load_session_messages,
+    write_session_jsonl,
+)
 
 # AGENT_API_VERSION：仅诊断用；模块刷新由 App.sync_runtime_modules（磁盘 mtime）驱动。
-AGENT_API_VERSION = 9
+AGENT_API_VERSION = 10
 
 _SCENE_OBJECT_NAME_RE = re.compile(r'GameObject\s*\(\s*["\']([^"\']+)["\']')
 
@@ -136,6 +143,81 @@ def clear_history():
     _turn_system_prompt = None
     _reset_exec_globals()
     print(json.dumps({"ok": True, "message": "history cleared"}, ensure_ascii=False))
+
+
+def replace_history(messages_json):
+    """整体替换 _history（session 恢复用）。messages_json 为 JSON 数组字符串。"""
+    global _history, _turn_start_len, _turn_system_prompt, _abort_flag
+    try:
+        msgs = json.loads(messages_json) if isinstance(messages_json, str) else messages_json
+    except (TypeError, json.JSONDecodeError) as e:
+        print(json.dumps({"ok": False, "message": f"invalid history json: {e}"}, ensure_ascii=False))
+        return
+    if not isinstance(msgs, list):
+        print(json.dumps({"ok": False, "message": "history must be a list"}, ensure_ascii=False))
+        return
+    _history = deepcopy_history(msgs)
+    _turn_start_len = len(_history)
+    _turn_system_prompt = None
+    _abort_flag = False
+    print(json.dumps({
+        "ok": True,
+        "history_len": len(_history),
+        "ui_messages": history_to_ui_messages(_history),
+    }, ensure_ascii=False))
+
+
+def export_history():
+    """导出当前 _history（深拷贝）与 UI 气泡摘要。"""
+    print(json.dumps({
+        "ok": True,
+        "value": deepcopy_history(_history),
+        "history_len": len(_history),
+        "ui_messages": history_to_ui_messages(_history),
+    }, ensure_ascii=False))
+
+
+def create_session_file(path, session_id, name="", cwd=""):
+    """创建仅含 header 的空 session JSONL。"""
+    result = create_empty_session(path, session_id, name=name or "", cwd=cwd or "")
+    print(json.dumps(result, ensure_ascii=False))
+
+
+def persist_session(path, session_id, name="", cwd="", created_at=None):
+    """将当前 _history 覆盖写入 session JSONL（线性 id/parentId 链）。"""
+    result = write_session_jsonl(
+        path,
+        session_id,
+        _history,
+        name=name or "",
+        cwd=cwd or "",
+        created_at=created_at,
+    )
+    print(json.dumps(result, ensure_ascii=False))
+
+
+def load_session(path):
+    """从 session JSONL 加载 leaf 路径到 _history，并返回 UI 摘要。"""
+    global _history, _turn_start_len, _turn_system_prompt, _abort_flag
+    loaded = load_session_messages(path)
+    if not loaded.get("ok"):
+        print(json.dumps(loaded, ensure_ascii=False))
+        return
+    _history = deepcopy_history(loaded.get("history") or [])
+    _turn_start_len = len(_history)
+    _turn_system_prompt = None
+    _abort_flag = False
+    print(json.dumps({
+        "ok": True,
+        "session_id": loaded.get("session_id"),
+        "name": loaded.get("name") or "",
+        "leaf_id": loaded.get("leaf_id"),
+        "history_len": len(_history),
+        "ui_messages": loaded.get("ui_messages") or [],
+        "summary": loaded.get("summary") or "",
+        "createdAt": loaded.get("createdAt"),
+        "path": path,
+    }, ensure_ascii=False))
 
 
 def abort():

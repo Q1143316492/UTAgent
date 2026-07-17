@@ -91,16 +91,40 @@ namespace UTAgent.Editor.Agent
             {
                 RefreshPythonModulesFromDisk();
             }
+
+            EditorApplication.delayCall += TryBootstrapSessionUiOnEnable;
+        }
+
+        private void TryBootstrapSessionUiOnEnable()
+        {
+            if (this == null)
+            {
+                return;
+            }
+
+            UTAgentReadiness.Status readiness = UTAgentReadiness.GetChatStatus(mRunner);
+            if (!readiness.Ready && UTAgentBootstrap.IsAvailable)
+            {
+                readiness = UTAgentReadiness.TryEnsureChatReady(mRunner);
+            }
+
+            if (readiness.Ready)
+            {
+                EnsureSessionRestored();
+                Repaint();
+            }
         }
 
         private void OnDisable()
         {
             EditorApplication.delayCall -= OnAbortSafetyReset;
+            EditorApplication.delayCall -= TryBootstrapSessionUiOnEnable;
         }
 
         private void OnDestroy()
         {
             EditorApplication.delayCall -= OnAbortSafetyReset;
+            EditorApplication.delayCall -= TryBootstrapSessionUiOnEnable;
             mRunner.Abort();
             ClearPreview();
             DestroyTex(ref mUserBubbleTex);
@@ -113,6 +137,10 @@ namespace UTAgent.Editor.Agent
         {
             EditorGUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.Height(28), GUILayout.ExpandWidth(true));
             GUILayout.Label("UT Agent", EditorStyles.boldLabel);
+            string sessionLabel = mRunner.Session.HasOpenSession
+                ? mRunner.Session.DisplayLabel()
+                : "—";
+            GUILayout.Label($"会话 {sessionLabel}", EditorStyles.miniLabel, GUILayout.MaxWidth(120));
             string status;
             if (mWaiting) status = "● Thinking...";
             else if (UTAgentReadiness.GetChatStatus(mRunner).Ready)
@@ -125,6 +153,14 @@ namespace UTAgent.Editor.Agent
             }
             GUILayout.FlexibleSpace();
             GUILayout.Label(status, EditorStyles.miniLabel);
+            if (GUILayout.Button("新建", EditorStyles.toolbarButton, GUILayout.Width(40)))
+            {
+                NewChatSession();
+            }
+            if (GUILayout.Button("会话…", EditorStyles.toolbarButton, GUILayout.Width(48)))
+            {
+                UTAgentSessionWindow.Open(mRunner, OnSessionPanelChanged);
+            }
             if (UTAgentBootstrap.IsAvailable)
             {
                 if (GUILayout.Button("刷新 Python", EditorStyles.toolbarButton, GUILayout.Width(88)))
@@ -412,16 +448,13 @@ namespace UTAgent.Editor.Agent
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Clear", GUILayout.Width(56)))
             {
-                if (EditorUtility.DisplayDialog("Clear", "清空所有消息与历史？", "Clear", "Cancel"))
+                if (EditorUtility.DisplayDialog(
+                        "Clear",
+                        "新建会话并清空当前消息？其它已保存会话不会删除。",
+                        "新建会话",
+                        "Cancel"))
                 {
-                    mOutboundQueue.Clear();
-                    mFlushInterrupt = false;
-                    mRunner.Abort();
-                    mMessages.Clear();
-                    mRunner.ClearHistory();
-                    EndWaitingTurn();
-                    mMessageScroll.Reset();
-                    Repaint();
+                    NewChatSession();
                 }
             }
 
@@ -622,6 +655,7 @@ namespace UTAgent.Editor.Agent
                 AddMessage($"{readiness.Summary}\n{readiness.Detail}", false);
                 return;
             }
+            EnsureSessionRestored();
             if (TryContinueFromInput(text))
             {
                 return;
@@ -987,6 +1021,160 @@ namespace UTAgent.Editor.Agent
             Repaint();
         }
 
+        /// <summary>
+        /// configure 后 / 发送前：保证 Python history 与打开的 session 一致。
+        /// </summary>
+        private void EnsureSessionRestored()
+        {
+            if (!mRunner.IsConfigured())
+            {
+                return;
+            }
+
+            bool hadMessages = mMessages.Count > 0;
+            if (!mRunner.EnsureSessionHistorySynced(out string loadJson, out string err))
+            {
+                if (!string.IsNullOrEmpty(err) && err != "未配置")
+                {
+                    Debug.LogWarning($"[UTAgentChat] session 同步失败：{err}");
+                }
+
+                return;
+            }
+
+            // 仅在 UI 仍为空时灌气泡，避免覆盖用户正在看的列表；
+            // 若 history 刚从磁盘重载且 UI 空，则重建。
+            if (!hadMessages && !string.IsNullOrEmpty(loadJson))
+            {
+                ApplyUiMessagesFromSessionJson(loadJson);
+            }
+        }
+
+        private void NewChatSession()
+        {
+            mOutboundQueue.Clear();
+            mFlushInterrupt = false;
+            mRunner.Abort();
+            EndWaitingTurn();
+            mMessages.Clear();
+            mMessageScroll.Reset();
+            if (mRunner.IsConfigured() || UTAgentBootstrap.IsAvailable)
+            {
+                if (!mRunner.IsConfigured())
+                {
+                    UTAgentReadiness.TryEnsureChatReady(mRunner);
+                }
+
+                if (mRunner.IsConfigured())
+                {
+                    mRunner.ClearHistoryAndNewSession();
+                }
+            }
+
+            Repaint();
+        }
+
+        private void OnSessionPanelChanged()
+        {
+            // 面板内打开/删除后刷新 Chat UI
+            if (!mRunner.Session.HasOpenSession)
+            {
+                mMessages.Clear();
+                mMessageScroll.Reset();
+                Repaint();
+                return;
+            }
+
+            if (mRunner.OpenSession(mRunner.Session.CurrentSessionId, out string loadJson, out _))
+            {
+                mMessages.Clear();
+                mMessageScroll.Reset();
+                ApplyUiMessagesFromSessionJson(loadJson);
+            }
+
+            Repaint();
+        }
+
+        private void ShowRestoreSessionMenu()
+        {
+            UTAgentSessionWindow.Open(mRunner, OnSessionPanelChanged);
+        }
+
+        private void RestoreSessionById(string sessionId)
+        {
+            if (mWaiting)
+            {
+                EditorUtility.DisplayDialog("恢复会话", "请先等待当前回合结束或 Stop。", "OK");
+                return;
+            }
+
+            mOutboundQueue.Clear();
+            mFlushInterrupt = false;
+            mRunner.Abort();
+            EndWaitingTurn();
+            if (!mRunner.OpenSession(sessionId, out string loadJson, out string err))
+            {
+                EditorUtility.DisplayDialog("恢复会话", err ?? "打开失败", "OK");
+                return;
+            }
+
+            mMessages.Clear();
+            mMessageScroll.Reset();
+            ApplyUiMessagesFromSessionJson(loadJson);
+            Repaint();
+        }
+
+        private void ApplyUiMessagesFromSessionJson(string loadJson)
+        {
+            if (string.IsNullOrEmpty(loadJson))
+            {
+                return;
+            }
+
+            List<(bool isUser, string text, string block)> items =
+                UTAgentRunner.ParseUiMessages(loadJson);
+            foreach ((bool isUser, string text, string block) in items)
+            {
+                if (isUser)
+                {
+                    AddMessage(text, true);
+                    continue;
+                }
+
+                var msg = new ChatMessage
+                {
+                    Text = "",
+                    IsUser = false,
+                    Timestamp = DateTime.Now.ToString("HH:mm"),
+                    Blocks = new List<MessageBlock>(),
+                };
+                string type = string.IsNullOrEmpty(block) ? "answer" : block;
+                if (type == "tool_call")
+                {
+                    type = "tool_call";
+                }
+                else if (type == "observation")
+                {
+                    type = "observation";
+                }
+                else if (type == "compaction")
+                {
+                    type = "answer";
+                }
+                else
+                {
+                    type = "answer";
+                }
+
+                if (!string.IsNullOrEmpty(text))
+                {
+                    msg.Blocks.Add(new MessageBlock { Type = type, Text = text });
+                }
+
+                mMessages.Add(msg);
+            }
+        }
+
         private void OpenImageBrowser()
         {
             string path = EditorUtility.OpenFilePanel("Select Image", "", "png,jpg,jpeg,bmp,gif,webp");
@@ -1030,6 +1218,7 @@ namespace UTAgent.Editor.Agent
             UTAgentReadiness.Status status = UTAgentReadiness.TryEnsureChatReady(mRunner);
             if (mRunner.IsConfigured())
             {
+                EnsureSessionRestored();
                 AddMessage($"Python 模块已重新加载；Agent 已就绪。\n{status.Detail}", false);
             }
             else

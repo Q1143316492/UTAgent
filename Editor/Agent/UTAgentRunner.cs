@@ -96,6 +96,12 @@ namespace UTAgent.Editor.Agent
                 $"agent.configure({EscapePy(apiKey)}, {EscapePy(baseURL)}, {EscapePy(model)}, {maxSteps})\n";
             string result = SafeExec(script);
             mConfigured = ParseExecOk(result, out _);
+            if (mConfigured)
+            {
+                // configure() 清空了 Python _history，须从 session 再灌
+                MarkSessionHistoryNeedsReload();
+            }
+
             return result;
         }
 
@@ -105,6 +111,7 @@ namespace UTAgent.Editor.Agent
         public void InvalidateConfigured()
         {
             mConfigured = false;
+            MarkSessionHistoryNeedsReload();
         }
 
         /// <summary>
@@ -258,6 +265,14 @@ namespace UTAgent.Editor.Agent
         }
 
         /// <summary>
+        /// 清空历史并新建 session（Chat Clear 按钮语义）。
+        /// </summary>
+        public void ClearHistoryAndNewSession()
+        {
+            ClearToNewSession(out _);
+        }
+
+        /// <summary>
         /// Agent 是否已配置（有 API Key 且 configure 成功）。
         /// </summary>
         public bool IsConfigured()
@@ -298,7 +313,10 @@ namespace UTAgent.Editor.Agent
                     turn.IsFirst = false;
                     string beginOutput = SafeExec(ModuleImport +
                         $"agent.begin_turn({EscapePy(turn.UserText)}, {EscapePy(turn.ImageBase64)}, {EscapePy(turn.ImageMime)})\n");
-                    _ = beginOutput;
+                    if (ParseExecOk(beginOutput, out _))
+                    {
+                        PersistHistoryMutation();
+                    }
                 }
                 SafeExec(ModuleImport + $"agent.ensure_model({EscapePy(turn.Model)})\n");
                 SafeExec(ModuleImport + "agent.process_pending_images()\n");
@@ -696,6 +714,7 @@ namespace UTAgent.Editor.Agent
                     return;
                 }
 
+                PersistHistoryMutation();
                 turn.Logger?.LogCompaction("ok");
                 turn.JustCompacted = true;
                 PushProgress(turn, "status", "上下文摘要完成，继续任务…");
@@ -790,6 +809,7 @@ namespace UTAgent.Editor.Agent
                     {
                         SafeExec(ModuleImport +
                             $"agent.append_assistant_content({EscapePy(fallback)}, {EscapePy(reasoningContent)})\n");
+                        PersistHistoryMutation();
                     }
                     catch (Exception e)
                     {
@@ -811,6 +831,7 @@ namespace UTAgent.Editor.Agent
                     SafeExec(ModuleImport + $"agent.ensure_model({EscapePy(turn.Model)})\n");
                     SafeExec(ModuleImport +
                         $"agent.append_assistant_tool_calls({EscapePy(toolCallsJson)}, {EscapePy(reasoningContent)})\n");
+                    PersistHistoryMutation();
                 }
                 catch (Exception e)
                 {
@@ -835,6 +856,7 @@ namespace UTAgent.Editor.Agent
                 SafeExec(ModuleImport + $"agent.ensure_model({EscapePy(turn.Model)})\n");
                 SafeExec(ModuleImport +
                     $"agent.append_assistant_content({EscapePy(content)}, {EscapePy(reasoningContent)})\n");
+                PersistHistoryMutation();
             }
             catch (Exception e)
             {
@@ -990,9 +1012,8 @@ namespace UTAgent.Editor.Agent
             }
 
             SafeExec(ModuleImport + "agent.process_pending_images()\n");
-
-            // 本批 tool 结束、下一轮 LLM 前注入 steering（对 LLM 可见）
             DrainSteeringBeforeNextLlm(turn);
+            PersistHistoryMutation();
 
             if (turn.TerminateAfterTools)
             {
@@ -1062,6 +1083,7 @@ namespace UTAgent.Editor.Agent
             try
             {
                 SafeExec(ModuleImport + "agent.inject_max_steps_message()\n");
+                PersistHistoryMutation();
             }
             catch (Exception e)
             {
