@@ -987,6 +987,46 @@ def _emergency_trim(messages, keep_n):
 
 _SKILL_DIR = os.path.join(os.path.dirname(__file__), "skills")
 _BASE_SKILL = "python-interop"
+# agent.py → Python → UTAgent；再上两级到项目根（Assets 的父目录）
+_UTAGENT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_UTAGENT_ROOT, "..", ".."))
+DEFAULT_PROJECT_INSTRUCTIONS_MAX_CHARS = 4000
+
+
+def _find_project_instructions_path():
+    """按序取第一个存在的 AGENTS.md；不自动加载 CLAUDE.md。"""
+    candidates = [
+        os.path.join(_PROJECT_ROOT, "AGENTS.md"),
+        os.path.join(_UTAGENT_ROOT, "AGENTS.md"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _load_project_instructions(max_chars=DEFAULT_PROJECT_INSTRUCTIONS_MAX_CHARS):
+    """读项目指令；返回 (text|None, path|None)。可观测行写 stderr。"""
+    path = _find_project_instructions_path()
+    if not path:
+        return None, None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read().strip()
+    except Exception as e:
+        print(f"project-instructions: read failed path={path} err={e}", file=sys.stderr)
+        return None, None
+    if not text:
+        print(f"project-instructions: empty path={path}", file=sys.stderr)
+        return None, path
+    original_len = len(text)
+    if max_chars > 0 and original_len > max_chars:
+        text = text[:max_chars] + "\n…[truncated]"
+    print(
+        f"project-instructions: loaded path={path} chars={len(text)} original={original_len}",
+        file=sys.stderr,
+    )
+    return text, path
 
 
 def _parse_skill_frontmatter(text):
@@ -1065,6 +1105,9 @@ def _build_system_prompt():
         "L3 `from unity_bind import CS` — Editor 动态反射\n"
         "禁止 `import clr` / 首步 `help(unity)` / 读 `Assets/**/*.cs` 源码。",
     ]
+    project_text, _path = _load_project_instructions()
+    if project_text:
+        parts.append("## Project Instructions\n" + project_text)
     return "\n\n".join(parts)
 
 
