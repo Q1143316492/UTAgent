@@ -52,6 +52,32 @@ $env:UTAGENT_API_KEY = "sk-..."
 - **Editor 启动**：不自动迁移配置、不自动启 CLI；打开 Chat 时按 json 同步 CLI 监听
 - **发消息**：自动 `Initialize` + `ConfigureFromConfig`（前提：API Key 与 PythonHome 就绪）
 
+### Agent 编排（仅 JSON，不进 Settings 面板）
+
+Harness 旋钮只改配置文件，改完需 `UTAgentConfig.Reload()`（或重启 Editor / 重开 Settings 触发加载）。在 `llm` 段：
+
+| 字段 | 默认 | 说明 |
+|------|------|------|
+| `afterToolTruncateChars` | `8000` | 单条 tool stdout 超长则截断再进 history；`0`=关 |
+| `noProgressEnabled` | `false` | 连续纯侦察空转时 after-tool 注入提醒；日常建议保持关 |
+| `noProgressStreak` | `3` | 触发阈值；仅 `noProgressEnabled=true` 时生效 |
+
+示例（写入 `utagent.local.json` 覆盖）：
+
+```json
+{
+  "llm": {
+    "afterToolTruncateChars": 8000,
+    "noProgressEnabled": false,
+    "noProgressStreak": 3
+  }
+}
+```
+
+回归：截断见 L2 C12；无进展见 L2 C13（测时临时开 `noProgressEnabled`）。
+
+**运行中改指令（Chat）**：Enter 有内容 → 入「待发送」队列；点队列「发送」或**空 Enter**（队列非空）→ Abort 后写入 history 并续跑。Stop 急停并清空队列。换行快捷键暂未开放。Runner 仍保留软 `Steer` / `FollowUp` API。
+
 > 注：曾规划的「更换/清除外部 Python 路径」UI（`fix-python-config-ux`）已被本方案取代，不再支持选本机 Programs\Python。
 
 ## CLI

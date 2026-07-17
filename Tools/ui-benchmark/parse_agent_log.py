@@ -57,6 +57,7 @@ BENCHMARK_ASSERTS = {
     "C10": ("WndSettings", None, None),  # 反复守卫后 reminder_in_llm ≤ 1
     "C11": ("childControl", None, "inject reminder"),  # layout-control
     "C12": ("print", None, None),  # after-tool truncate
+    "C13": ("盲找", None, None),  # after-tool no-progress
 }
 
 
@@ -248,6 +249,14 @@ def run_assert(parsed, case_id):
             for d in parsed.get("after_tool_decisions") or []
         )
         detail_parts.append(f"after-tool truncate rewrite={'found' if found else 'MISSING'}")
+        ok = ok and found
+
+    if case_id == "C13":
+        found = any(
+            d["domain"] == "no-progress" and "inject reminder" in d["action"]
+            for d in parsed.get("after_tool_decisions") or []
+        )
+        detail_parts.append(f"after-tool no-progress inject={'found' if found else 'MISSING'}")
         ok = ok and found
 
     if case_id == "C10":

@@ -201,6 +201,13 @@ namespace UTAgent.Editor.Agent
             }
 
             float width = GetBubbleContentWidth();
+            // 运行中不用 SelectableLabel：它会抢键盘焦点，且列表增高会改后续控件 ID
+            if (mWaiting)
+            {
+                GUILayout.Label(text, style, GUILayout.Width(width), GUILayout.MaxWidth(width));
+                return;
+            }
+
             float height = style.CalcHeight(new GUIContent(text), width);
             EditorGUILayout.SelectableLabel(
                 text,
@@ -502,7 +509,7 @@ namespace UTAgent.Editor.Agent
                     mCopiedMessageIndex = -1;
             }
 
-            if (isHovering && evt.type == EventType.Repaint)
+            if (isHovering && evt.type == EventType.Repaint && !mWaiting)
                 Repaint();
         }
     }

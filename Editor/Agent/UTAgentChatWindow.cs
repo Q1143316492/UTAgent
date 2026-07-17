@@ -34,6 +34,18 @@ namespace UTAgent.Editor.Agent
         private bool mSuppressInputCommit;
         private bool mWaiting;
         private int mProgressIndex = -1;
+        /// <summary>
+        /// 用户点过输入框后，Enter 仍可打断（不依赖瞬时焦点名）。
+        /// </summary>
+        private bool mLockInputFocus;
+        /// <summary>
+        /// 运行中 Enter 打断时暂存的用户消息；Abort 结束后写入 history 并续跑。
+        /// </summary>
+        private readonly List<string> mOutboundQueue = new List<string>();
+        /// <summary>
+        /// Enter 打断触发的 Abort 结束后自动续跑。
+        /// </summary>
+        private bool mFlushInterrupt;
 
         private string mAttachedImagePath;
         private Texture2D mAttachedPreview;
@@ -99,7 +111,7 @@ namespace UTAgent.Editor.Agent
 
         private void DrawHeader()
         {
-            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.Height(28));
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.Height(28), GUILayout.ExpandWidth(true));
             GUILayout.Label("UT Agent", EditorStyles.boldLabel);
             string status;
             if (mWaiting) status = "● Thinking...";
@@ -125,7 +137,6 @@ namespace UTAgent.Editor.Agent
                 OpenSettingsWindow();
             }
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.Space(4);
         }
 
         private void OnGUI()
@@ -140,15 +151,55 @@ namespace UTAgent.Editor.Agent
             // 尽早拦截 Undo，避免被 Unity 全局撤销抢走；且须在 TextArea 之前改好 mInput
             bool didUndoRedo = TryHandleInputUndoRedo();
 
-            DrawHeader();
+            const float headerH = 32f;
+            float inputH = MeasureInputAreaHeight();
+            float listH = Mathf.Max(40f, position.height - headerH - inputH);
 
-            DrawMessageList();
-            EditorGUILayout.Space(4);
+            // 先画输入框：控件 ID 在消息列表之前分配，流式增高不会改写输入框 ID / 抢焦点
+            var inputRect = new Rect(0f, position.height - inputH, position.width, inputH);
+            GUILayout.BeginArea(inputRect);
             DrawInputArea(didUndoRedo);
+            GUILayout.EndArea();
+
+            var headerRect = new Rect(0f, 0f, position.width, headerH);
+            GUILayout.BeginArea(headerRect);
+            DrawHeader();
+            GUILayout.EndArea();
+
+            var listRect = new Rect(0f, headerH, position.width, listH);
+            GUILayout.BeginArea(listRect);
+            DrawMessageList();
+            GUILayout.EndArea();
+        }
+
+        private float MeasureInputAreaHeight()
+        {
+            float attach = string.IsNullOrEmpty(mAttachedImagePath) ? 0f : 36f;
+            float inputWidth = Mathf.Max(80f, position.width - 32f - 56f - 48f);
+            GUIStyle style = mInputStyle ?? EditorStyles.textArea;
+            string measure = string.IsNullOrEmpty(mInput) ? " " : mInput;
+            float contentHeight = Mathf.Max(54f, style.CalcHeight(new GUIContent(measure), inputWidth - 8f));
+            float viewport = Mathf.Min(contentHeight, 160f);
+            float queue = 0f;
+            if (mWaiting && mOutboundQueue.Count > 0)
+            {
+                int show = Mathf.Min(mOutboundQueue.Count, 5);
+                queue = 28f + show * 16f + (mOutboundQueue.Count > show ? 14f : 0f);
+            }
+            // helpBox 边距 + 底栏提示行 + Stop/Send 列
+            return attach + viewport + queue + 28f + 20f + 12f;
         }
 
         private void DrawMessageList()
         {
+            // 点击消息区则释放输入锁，便于复制气泡文本
+            Event evt = Event.current;
+            if (evt.type == EventType.MouseDown && mMessageScroll.ContainsMouse(evt.mousePosition))
+            {
+                mLockInputFocus = false;
+                mInputFieldActive = false;
+            }
+
             mMessageScroll.Draw(DrawMessageListContent, mMessages.Count > 0, GetMessageContentVersion());
         }
 
@@ -178,17 +229,43 @@ namespace UTAgent.Editor.Agent
             }
 
             Event evt = Event.current;
-            bool submitChord = evt.type == EventType.KeyDown
-                && (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
-                && (evt.control || evt.command);
-            if (submitChord
-                && mInputFieldActive
-                && !mWaiting
-                && !string.IsNullOrWhiteSpace(mInput))
+            bool inputHot = mInputFieldActive
+                || mLockInputFocus
+                || GUI.GetNameOfFocusedControl() == InputControlName;
+            if (evt.type == EventType.KeyDown && inputHot)
             {
-                evt.Use();
-                Send(mInput);
-                GUIUtility.ExitGUI();
+                bool keyEnter = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
+                bool charNewline = evt.character == '\n' || evt.character == '\r';
+
+                // Unity 常跟一条仅 character 的换行事件；若也当 Enter 会「入队后立刻空 Enter flush」
+                if (charNewline && !keyEnter)
+                {
+                    evt.Use();
+                    GUIUtility.ExitGUI();
+                }
+
+                if (keyEnter)
+                {
+                    if (!string.IsNullOrWhiteSpace(mInput))
+                    {
+                        evt.Use();
+                        string toSend = mInput;
+                        ClearInputAfterSend();
+                        Send(toSend);
+                        GUIUtility.ExitGUI();
+                    }
+                    else if (mWaiting && mOutboundQueue.Count > 0)
+                    {
+                        evt.Use();
+                        FlushOutboundInterrupt();
+                        GUIUtility.ExitGUI();
+                    }
+                    else
+                    {
+                        // 空 Enter 且无队列：吞掉，避免 TextArea 插入换行
+                        evt.Use();
+                    }
+                }
             }
 
             EditorGUILayout.BeginHorizontal();
@@ -240,10 +317,17 @@ namespace UTAgent.Editor.Agent
             if (GUI.GetNameOfFocusedControl() == InputControlName)
             {
                 mInputFieldActive = true;
+                mLockInputFocus = true;
             }
             else if (evt.type == EventType.MouseDown)
             {
-                mInputFieldActive = false;
+                // 点到输入框区域则上锁；点到别处（非消息区已在 DrawMessageList 处理）不在此释放
+                Rect inputRect = GUILayoutUtility.GetLastRect();
+                if (inputRect.Contains(evt.mousePosition))
+                {
+                    mInputFieldActive = true;
+                    mLockInputFocus = true;
+                }
             }
 
             if (didUndoRedo || mSuppressInputCommit)
@@ -267,6 +351,8 @@ namespace UTAgent.Editor.Agent
             {
                 if (GUILayout.Button("Stop", GUILayout.Height(24)))
                 {
+                    mOutboundQueue.Clear();
+                    mFlushInterrupt = false;
                     mRunner.Abort();
                     EditorApplication.delayCall -= OnAbortSafetyReset;
                     EditorApplication.delayCall += OnAbortSafetyReset;
@@ -284,13 +370,52 @@ namespace UTAgent.Editor.Agent
             EditorGUILayout.EndVertical();
             EditorGUILayout.EndHorizontal();
 
+            if (mWaiting && mOutboundQueue.Count > 0)
+            {
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label($"待发送 {mOutboundQueue.Count} 条", EditorStyles.miniLabel);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("发送", GUILayout.Width(48), GUILayout.Height(20)))
+                {
+                    FlushOutboundInterrupt();
+                }
+                if (GUILayout.Button("清空", GUILayout.Width(40), GUILayout.Height(20)))
+                {
+                    mOutboundQueue.Clear();
+                    Repaint();
+                }
+                EditorGUILayout.EndHorizontal();
+                int show = Mathf.Min(mOutboundQueue.Count, 5);
+                for (int i = 0; i < show; i++)
+                {
+                    string preview = mOutboundQueue[i];
+                    if (preview.Length > 72)
+                    {
+                        preview = preview.Substring(0, 72) + "…";
+                    }
+                    GUILayout.Label($"· {preview}", EditorStyles.wordWrappedMiniLabel);
+                }
+                if (mOutboundQueue.Count > show)
+                {
+                    GUILayout.Label($"…另有 {mOutboundQueue.Count - show} 条", EditorStyles.miniLabel);
+                }
+                EditorGUILayout.EndVertical();
+            }
+
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Ctrl+Enter 发送", EditorStyles.miniLabel);
+            GUILayout.Label(
+                mWaiting
+                    ? "Enter 入队 · 空 Enter / 发送 = 打断续跑"
+                    : "Enter 发送",
+                EditorStyles.miniLabel);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Clear", GUILayout.Width(56)))
             {
                 if (EditorUtility.DisplayDialog("Clear", "清空所有消息与历史？", "Clear", "Cancel"))
                 {
+                    mOutboundQueue.Clear();
+                    mFlushInterrupt = false;
                     mRunner.Abort();
                     mMessages.Clear();
                     mRunner.ClearHistory();
@@ -455,16 +580,41 @@ namespace UTAgent.Editor.Agent
             mSuppressInputCommit = false;
         }
 
+        /// <summary>
+        /// 发送后清空输入，打断 TextArea 内嵌编辑器，避免 Enter 残留换行/重复提交。
+        /// </summary>
+        private void ClearInputAfterSend()
+        {
+            mInput = "";
+            mInputUndoStack.Clear();
+            mInputUndoStack.Add("");
+            mInputUndoIndex = 0;
+            mInputScroll = Vector2.zero;
+            mSuppressInputCommit = true;
+            EditorGUIUtility.editingTextField = false;
+            // 发送后仍允许 Enter 打断；不强制 FocusTextInControl（会与流式刷新打架）
+            mLockInputFocus = true;
+        }
+
         private void Send(string text)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
                 return;
             }
+
+            text = text.Trim();
+
+            // 运行中：入待发送队列，不立刻打断
             if (mWaiting)
             {
+                mOutboundQueue.Add(text);
+                ClearInputAfterSend();
+                ClearAttached();
+                Repaint();
                 return;
             }
+
             UTAgentConfig.PrepareForChat();
             UTAgentReadiness.Status readiness = UTAgentReadiness.TryEnsureChatReady(mRunner);
             if (!readiness.Ready)
@@ -472,7 +622,6 @@ namespace UTAgent.Editor.Agent
                 AddMessage($"{readiness.Summary}\n{readiness.Detail}", false);
                 return;
             }
-            text = text.Trim();
             if (TryContinueFromInput(text))
             {
                 return;
@@ -480,10 +629,46 @@ namespace UTAgent.Editor.Agent
             string img = mAttachedImagePath;
             mMessageScroll.OnSend();
             AddMessage(text, true);
-            ResetInputUndoState("");
+            ClearInputAfterSend();
             RunTurn(text, img);
             ClearAttached();
             Repaint();
+        }
+
+        /// <summary>
+        /// 发送队列：打断当前 turn，把待发写入 history 后续跑。
+        /// </summary>
+        private void FlushOutboundInterrupt()
+        {
+            if (!mWaiting || mOutboundQueue.Count == 0 || mFlushInterrupt)
+            {
+                return;
+            }
+
+            mFlushInterrupt = true;
+            mRunner.Abort();
+            EditorApplication.delayCall -= OnAbortSafetyReset;
+            EditorApplication.delayCall += OnAbortSafetyReset;
+            Repaint();
+        }
+
+        private void FlushOutboundAndContinue()
+        {
+            if (mOutboundQueue.Count == 0)
+            {
+                return;
+            }
+
+            mMessageScroll.OnSend();
+            for (int i = 0; i < mOutboundQueue.Count; i++)
+            {
+                string text = mOutboundQueue[i];
+                AddMessage(text, true);
+                mRunner.AppendUserMessage(text, "user");
+            }
+
+            mOutboundQueue.Clear();
+            RunContinue();
         }
 
         private bool CanContinueFromLastMessage()
@@ -510,7 +695,7 @@ namespace UTAgent.Editor.Agent
                 return false;
             }
 
-            ResetInputUndoState("");
+            ClearInputAfterSend();
             mMessageScroll.OnSend();
             RunContinue();
             Repaint();
@@ -571,13 +756,25 @@ namespace UTAgent.Editor.Agent
 
         private void CompleteTurn(string finalText, bool isError, string outcome, List<ProgressEvent> events)
         {
+            EditorApplication.delayCall -= OnAbortSafetyReset;
+
+            bool willFlush = mFlushInterrupt && outcome == "aborted" && mOutboundQueue.Count > 0;
+            if (willFlush)
+            {
+                mFlushInterrupt = false;
+            }
+
             try
             {
-                FinalizeProgress(finalText, isError, outcome);
+                FinalizeProgress(finalText, isError, outcome, suppressContinue: willFlush);
             }
             finally
             {
                 EndWaitingTurn();
+                if (willFlush)
+                {
+                    FlushOutboundAndContinue();
+                }
                 Repaint();
             }
         }
@@ -591,12 +788,19 @@ namespace UTAgent.Editor.Agent
         private void OnAbortSafetyReset()
         {
             EditorApplication.delayCall -= OnAbortSafetyReset;
-            if (!mWaiting)
+            // 仅当 Abort 未走到 CompleteTurn 时兜底
+            if (!mWaiting || mRunner.HasActiveTurn)
             {
                 return;
             }
 
+            bool willFlush = mFlushInterrupt && mOutboundQueue.Count > 0;
+            mFlushInterrupt = false;
             EndWaitingTurn();
+            if (willFlush)
+            {
+                FlushOutboundAndContinue();
+            }
             Repaint();
         }
 
@@ -663,7 +867,7 @@ namespace UTAgent.Editor.Agent
             return type;
         }
 
-        private void FinalizeProgress(string finalText, bool isError, string outcome)
+        private void FinalizeProgress(string finalText, bool isError, string outcome, bool suppressContinue = false)
         {
             if (mProgressIndex < 0 || mProgressIndex >= mMessages.Count)
                 return;
@@ -715,7 +919,7 @@ namespace UTAgent.Editor.Agent
                 });
             }
 
-            msg.ShowContinue = UTAgentRunner.CanContinueFromOutcome(outcome);
+            msg.ShowContinue = !suppressContinue && UTAgentRunner.CanContinueFromOutcome(outcome);
             mMessages[mProgressIndex] = msg;
             mProgressIndex = -1;
         }

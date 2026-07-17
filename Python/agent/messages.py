@@ -14,9 +14,12 @@ REMINDER = "reminder"
 NUDGE = "nudge"
 SCREENSHOT = "screenshot"
 COMPACTION = "compaction"
+# 运行中纠偏 / 终轮追加：须进 LLM，不得标 ephemeral
+STEERING = "steering"
+FOLLOW_UP = "follow-up"
 
 EPHEMERAL_KINDS = frozenset({REMINDER, NUDGE})
-# compaction 非 ephemeral：convert_to_llm 始终保留（再叠 token 预算）
+# compaction / steering / follow-up 非 ephemeral：convert_to_llm 始终保留（再叠 token 预算）
 
 _LLM_FIELDS = ("role", "content", "tool_calls", "tool_call_id", "reasoning_content")
 

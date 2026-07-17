@@ -31,6 +31,11 @@ namespace UTAgent.Editor.Agent
             mScrollViewRect = Rect.zero;
         }
 
+        public bool ContainsMouse(Vector2 mousePosition)
+        {
+            return mScrollViewRect.width > 1f && mScrollViewRect.Contains(mousePosition);
+        }
+
         public void OnSend()
         {
             mStickToBottom = true;

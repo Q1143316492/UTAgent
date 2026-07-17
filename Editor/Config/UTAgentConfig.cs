@@ -289,6 +289,24 @@ namespace UTAgent.Editor.Config
             return n;
         }
 
+        /// <summary>after-tool 无进展矫正是否开启（默认 false）。</summary>
+        public static bool ResolveNoProgressEnabled()
+        {
+            return Current.llm != null && Current.llm.noProgressEnabled;
+        }
+
+        /// <summary>无进展连续纯侦察阈值（至少 1；默认 3）。</summary>
+        public static int ResolveNoProgressStreak()
+        {
+            int n = Current.llm?.noProgressStreak ?? 3;
+            if (n < 1)
+            {
+                return 3;
+            }
+
+            return n;
+        }
+
         /// <summary>
         /// 是否启用 LLM 摘要 compaction（超 token 预算时）；关闭则直接静态 emergency trim。
         /// </summary>
@@ -597,6 +615,8 @@ namespace UTAgent.Editor.Config
                 compactionInputPercent = source.compactionInputPercent,
                 maxInputTokensOverride = source.maxInputTokensOverride,
                 afterToolTruncateChars = source.afterToolTruncateChars,
+                noProgressEnabled = source.noProgressEnabled,
+                noProgressStreak = source.noProgressStreak,
             };
         }
 
@@ -691,6 +711,19 @@ namespace UTAgent.Editor.Config
                 target.afterToolTruncateChars = local.afterToolTruncateChars < 0
                     ? 0
                     : local.afterToolTruncateChars;
+            }
+
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"noProgressEnabled\"", StringComparison.Ordinal) >= 0)
+            {
+                target.noProgressEnabled = local.noProgressEnabled;
+            }
+
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"noProgressStreak\"", StringComparison.Ordinal) >= 0 &&
+                local.noProgressStreak > 0)
+            {
+                target.noProgressStreak = local.noProgressStreak;
             }
         }
 

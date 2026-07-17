@@ -125,6 +125,11 @@ namespace UTAgent.Editor.Agent
                 onResponse?.Invoke("请先在设置里填 API Key 并 Apply。", true, "error", null);
                 return;
             }
+            if (mActiveTurns.Count > 0)
+            {
+                onResponse?.Invoke("已有活跃任务，请用 Steer 纠偏或先 Stop。", true, "error", null);
+                return;
+            }
             string imageBase64 = "";
             string mimeType = "";
             if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
@@ -164,6 +169,11 @@ namespace UTAgent.Editor.Agent
             if (!IsConfigured())
             {
                 onResponse?.Invoke("请先在设置里填 API Key 并 Apply。", true, "error", null);
+                return;
+            }
+            if (mActiveTurns.Count > 0)
+            {
+                onResponse?.Invoke("已有活跃任务，请先 Stop 或等结束后再续跑。", true, "error", null);
                 return;
             }
             if (GetHistoryLength() <= 0)
@@ -215,6 +225,7 @@ namespace UTAgent.Editor.Agent
         /// </summary>
         public void Abort()
         {
+            ClearSteeringQueues();
             for (int i = mActiveTurns.Count - 1; i >= 0; i--)
             {
                 var turn = mActiveTurns[i];
@@ -238,6 +249,7 @@ namespace UTAgent.Editor.Agent
         /// </summary>
         public void ClearHistory()
         {
+            ClearSteeringQueues();
             if (!UTAgentBootstrap.IsAvailable)
             {
                 return;
@@ -835,6 +847,17 @@ namespace UTAgent.Editor.Agent
                 FinishTurn(turn, content, false, "max_steps_summary");
                 return;
             }
+
+            // 终轮 follow-up：注入后再跑一轮，不立即 FinishTurn
+            if (DrainFollowUpBeforeFinish(turn))
+            {
+                if (!PrepareNextRequest(turn))
+                {
+                    FinishTurn(turn, "准备 follow-up 请求失败（看 Console）", true);
+                }
+                return;
+            }
+
             FinishTurn(turn, content, false);
         }
 
@@ -967,6 +990,9 @@ namespace UTAgent.Editor.Agent
             }
 
             SafeExec(ModuleImport + "agent.process_pending_images()\n");
+
+            // 本批 tool 结束、下一轮 LLM 前注入 steering（对 LLM 可见）
+            DrainSteeringBeforeNextLlm(turn);
 
             if (turn.TerminateAfterTools)
             {
@@ -1182,6 +1208,10 @@ namespace UTAgent.Editor.Agent
             public int MaxSteps;
             /// <summary>after-tool 请求：本批 tool 结束后不再自动开下一轮 LLM。</summary>
             public bool TerminateAfterTools;
+            /// <summary>本 turn 连续纯侦察步数（无进展策略）。</summary>
+            public int NoProgressStreak;
+            /// <summary>本 turn 已注入无进展 reminder 次数。</summary>
+            public int NoProgressInjectCount;
             public UTAgentSessionLogger Logger;
 
             public string ApiKey => UTAgentConfig.ResolveApiKey();

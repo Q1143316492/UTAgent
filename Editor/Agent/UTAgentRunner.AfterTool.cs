@@ -13,9 +13,8 @@ namespace UTAgent.Editor.Agent
         /// </summary>
         private void AfterToolProcess(TurnState turn, string code, ref string content, ref string preview)
         {
-            // code 供后续策略（无进展等）使用
-            _ = code;
             ApplyStdoutTruncateIfEnabled(turn, ref content, ref preview);
+            ApplyNoProgressIfEnabled(turn, code);
         }
 
         /// <summary>

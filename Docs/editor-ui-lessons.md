@@ -24,6 +24,15 @@
 
 ## 记录
 
+### 2026-07-18 · WndRoleDetail 技能描述竖条字 + 对象名带 emoji
+
+- **现象**：技能区中间文案竖排；Hierarchy 出现 `GrpSkill_✦ ` / `GrpSkill_❄ ` 等
+- **根因**：
+  1. `HorizontalLayoutGroup.childForceExpandWidth=False`，左侧 `TxtSkillName.preferredWidth=90`，右侧 `TxtSkillDesc` 未设 `preferredWidth`/`flexibleWidth` → `rect.w=0` → 竖条字
+  2. 把 emoji 写进 `GameObject.name`（展示应用 `TMP.text`）
+- **已回灌**：skill `editor-ui.md.txt` 命名 v2（禁 emoji/中文进对象名）+ HLG 文本行硬规则；本文件
+- **仍缺**：无（现场 `WndRoleDetail` 可用 CLI 修：`flexibleWidth=1` + 重命名 `GrpSkillRow{N}`）
+
 ### 2026-07-17 · WndLogin 输入框宽度塌成 0
 
 - **现象**：登录面板 `Input*` 看起来像竖条字；CLI 查 `InputBg`/`Input*` `rect.w=0`

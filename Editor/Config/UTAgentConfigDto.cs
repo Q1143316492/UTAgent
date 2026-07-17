@@ -50,6 +50,10 @@ namespace UTAgent.Editor.Config
         /// after-tool 截断：tool result content 超过该字符数则截断。0 = 禁用；出厂默认 8000。
         /// </summary>
         public int afterToolTruncateChars = 8000;
+        /// <summary>after-tool 无进展矫正总开关；默认关闭便于迭代。</summary>
+        public bool noProgressEnabled;
+        /// <summary>连续纯侦察步数阈值；默认 3。</summary>
+        public int noProgressStreak = 3;
     }
 
     [Serializable]
