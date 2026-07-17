@@ -33,6 +33,8 @@ RE_TURN_END = re.compile(r"^TURN END (\S+)")
 RE_STEP = re.compile(r"^--- step (\d+) ---$")
 # before-exec 决策行（缩进）：<domain>, skill=<state> → <action>（→ 为 U+2192）
 RE_BEFORE_EXEC_DECISION = re.compile(r"^\s+([^,]+?),\s*skill=(.+?)\s*→\s*(.+?)\s*$")
+# after-tool 决策行：<domain>[, <detail>] → <action>
+RE_AFTER_TOOL_DECISION = re.compile(r"^\s+([^,→]+?)(?:,\s*(.+?))?\s*→\s*(.+?)\s*$")
 # status: loadSkill: <name> <ok|fail>
 RE_LOADSKILL_STATUS = re.compile(r"^status: loadSkill: (\S+) (ok|fail)$")
 # llm-prepare reminder_in_history=N reminder_in_llm=M
@@ -54,6 +56,7 @@ BENCHMARK_ASSERTS = {
     "C09": ("GetComponents", None, "inject reminder"),  # heavy-reflection
     "C10": ("WndSettings", None, None),  # 反复守卫后 reminder_in_llm ≤ 1
     "C11": ("childControl", None, "inject reminder"),  # layout-control
+    "C12": ("print", None, None),  # after-tool truncate
 }
 
 
@@ -65,6 +68,7 @@ def parse(log_path):
     turns = []
     loadSkill_calls = []
     before_exec_decisions = []
+    after_tool_decisions = []
     llm_prepare_stats = []
     exec_steps = 0
     step_markers = 0
@@ -127,6 +131,27 @@ def parse(log_path):
             i += 1
             continue
 
+        # after-tool：看下一非空行
+        if rest == "after-tool":
+            j = i + 1
+            while j < n and lines[j].strip() == "":
+                j += 1
+            if j < n:
+                md = RE_AFTER_TOOL_DECISION.match(lines[j])
+                if md:
+                    after_tool_decisions.append({
+                        "domain": md.group(1).strip(),
+                        "detail": (md.group(2) or "").strip(),
+                        "action": md.group(3).strip(),
+                        "ts": ts,
+                    })
+                else:
+                    warnings.append(f"after-tool at {ts}: 决策行格式不符：{lines[j][:80]!r}")
+            else:
+                warnings.append(f"after-tool at {ts}: 缺决策行")
+            i += 1
+            continue
+
         # status: loadSkill: <name> <ok|fail>
         ml = RE_LOADSKILL_STATUS.match(rest)
         if ml:
@@ -171,6 +196,7 @@ def parse(log_path):
         "loadSkill_calls": loadSkill_calls,
         "exec_steps": exec_steps,
         "before_exec_decisions": before_exec_decisions,
+        "after_tool_decisions": after_tool_decisions,
         "llm_prepare_stats": llm_prepare_stats,
         "step_markers": step_markers,
         "parse_warnings": warnings,
@@ -213,6 +239,15 @@ def run_assert(parsed, case_id):
             for d in parsed["before_exec_decisions"]
         )
         detail_parts.append(f"layout-control inject={'found' if found else 'MISSING'}")
+        ok = ok and found
+
+    if case_id == "C12":
+        found = any(
+            d["domain"] == "truncate"
+            and ("rewrite" in d["action"] or "truncate" in d["action"])
+            for d in parsed.get("after_tool_decisions") or []
+        )
+        detail_parts.append(f"after-tool truncate rewrite={'found' if found else 'MISSING'}")
         ok = ok and found
 
     if case_id == "C10":

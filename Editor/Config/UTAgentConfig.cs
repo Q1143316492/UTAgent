@@ -276,11 +276,11 @@ namespace UTAgent.Editor.Config
         }
 
         /// <summary>
-        /// after-tool 截断烟测阈值（字符）。0 = 禁用。
+        /// after-tool 截断阈值（字符）。0 = 禁用；出厂默认 8000（产品开启）。
         /// </summary>
         public static int ResolveAfterToolTruncateChars()
         {
-            int n = Current.llm?.afterToolTruncateChars ?? 0;
+            int n = Current.llm?.afterToolTruncateChars ?? 8000;
             if (n < 0)
             {
                 return 0;

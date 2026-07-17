@@ -28,6 +28,7 @@ namespace UTAgent.Editor.Config
         private int mProviderIndex;
         private int mModelIndex;
         private int mMaxSteps = 25;
+        private int mAfterToolTruncateChars = 8000;
         private string mApiKeyEnvVar = UTAgentConfig.DefaultApiKeyEnvVar;
         private string mBaseUrlOverride = "";
         private bool mFoldBaseUrlOverride;
@@ -158,6 +159,12 @@ namespace UTAgent.Editor.Config
 
             DrawProviderModelFields();
             mMaxSteps = EditorGUILayout.IntSlider("Max Steps", mMaxSteps, 1, 100);
+            mAfterToolTruncateChars = EditorGUILayout.IntField(
+                "After-tool 截断字符数（0=关）", mAfterToolTruncateChars);
+            if (mAfterToolTruncateChars < 0)
+            {
+                mAfterToolTruncateChars = 0;
+            }
             mApiKeyEnvVar = EditorGUILayout.TextField("API Key 环境变量名", mApiKeyEnvVar);
 
             bool apiOk = UTAgentConfig.TryCheckApiKey(mApiKeyEnvVar, out string apiMsg);
@@ -407,6 +414,9 @@ namespace UTAgent.Editor.Config
             }
 
             UTAgentConfig.Current.llm.maxSteps = mMaxSteps;
+            UTAgentConfig.Current.llm.afterToolTruncateChars = mAfterToolTruncateChars < 0
+                ? 0
+                : mAfterToolTruncateChars;
             UTAgentConfig.Current.apiKeyEnvVar = string.IsNullOrWhiteSpace(mApiKeyEnvVar)
                 ? UTAgentConfig.DefaultApiKeyEnvVar
                 : mApiKeyEnvVar.Trim();
@@ -417,6 +427,7 @@ namespace UTAgent.Editor.Config
         {
             UTAgentConfigDto config = UTAgentConfig.Current;
             mMaxSteps = config.llm.maxSteps;
+            mAfterToolTruncateChars = config.llm.afterToolTruncateChars;
             mApiKeyEnvVar = config.apiKeyEnvVar;
             mBaseUrlOverride = config.llm.baseUrlOverride ?? "";
             mBridgeEnabled = config.bridge.enabled;

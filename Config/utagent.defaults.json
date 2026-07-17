@@ -27,7 +27,7 @@
         "compactionEnabled": true,
         "compactionInputPercent": 75,
         "maxInputTokensOverride": 0,
-        "afterToolTruncateChars": 0
+        "afterToolTruncateChars": 8000
     },
     "python": {
         "home": "",

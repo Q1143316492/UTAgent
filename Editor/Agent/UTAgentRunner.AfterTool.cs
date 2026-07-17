@@ -9,17 +9,17 @@ namespace UTAgent.Editor.Agent
 
         /// <summary>
         /// exec 后置处理：可改写 content/preview、注入 reminder、置 TerminateAfterTools。
-        /// 在 append_tool_result 之前调用。
+        /// 在 append_tool_result 之前调用。产品默认含 stdout 截断（afterToolTruncateChars）。
         /// </summary>
         private void AfterToolProcess(TurnState turn, string code, ref string content, ref string preview)
         {
-            // code 供后续策略（无进展等）使用；v1 仅截断烟测
+            // code 供后续策略（无进展等）使用
             _ = code;
             ApplyStdoutTruncateIfEnabled(turn, ref content, ref preview);
         }
 
         /// <summary>
-        /// 可关截断烟测：N&gt;0 且 content 超长时改写并记录 after-tool log。不置 terminate。
+        /// 产品级 stdout 截断：N&gt;0 且 content 超长时改写并记录 after-tool log。不置 terminate。
         /// </summary>
         private static void ApplyStdoutTruncateIfEnabled(TurnState turn, ref string content, ref string preview)
         {

@@ -8,7 +8,7 @@
 param(
     [switch]$L2,
     [switch]$L1Only,
-    [string]$Cases = "C01,C02,C03,C04,C06,C07,C08,C09,C10,C11"
+    [string]$Cases = "C01,C02,C03,C04,C06,C07,C08,C09,C10,C11,C12"
 )
 
 $ErrorActionPreference = "Stop"
@@ -158,6 +158,7 @@ if ($L2 -and -not $L1Only) {
         C09 = "用 GetComponents(CS.UnityEngine.Component) 列出 BtnSave 的所有组件"
         C10 = "创建设置面板 WndSettings，标题设置，两个 row（音乐/音效），底部保存/取消按钮，若守卫触发请拆步"
         C11 = "禁止 loadSkill。必须实际调用一次 execPython（不要凭记忆回答），code 一字不差：`nfrom unity_bind import CS`ng=CS.UnityEngine.GameObject('GrpLayoutC11')`nc=CS.UnityEngine.GameObject.Find('Canvas')`ng.transform.SetParent(c.transform, False)`ng.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)`nprint('c11')`n若被 before-exec 拦截请停止并说明守卫名。"
+        C12 = "禁止 loadSkill。必须实际调用一次 execPython（不要凭记忆回答），code 一字不差：`nprint('A' * 12000)`n然后用一句话说明已执行。不要做别的。"
     }
     foreach ($c in $caseList) {
         if (-not $prompts.ContainsKey($c)) { Add-Result -Id $c -Ok $false -Detail "未知用例"; continue }
