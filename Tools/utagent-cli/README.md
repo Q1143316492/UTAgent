@@ -33,6 +33,7 @@ CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent
 | `log tail [-n 80]` | 最新 agent 日志末尾 |
 | `log errors [-n 200]` | 筛 Traceback / HTTP 400 / step |
 | `scene find <name>` | 场景内同名对象计数 |
+| `screenshot [--view scene\|game]` | PNG 落盘，打印 path（Cursor Read 看图） |
 | `chat "..."` | 自然语言 ReAct（等同 Chat），默认阻塞到结束 |
 | `chat --no-wait "..."` | 仅提交，返回 turn_id（选项写在消息前） |
 | `chat wait <turn_id>` | 等待已有 turn |

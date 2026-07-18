@@ -353,6 +353,63 @@ def cmd_scene_find(args: argparse.Namespace) -> int:
     return EXIT_OK if status < 400 else EXIT_HTTP
 
 
+def cmd_screenshot(args: argparse.Namespace) -> int:
+    """截图落盘，打印 path，供 Cursor Read 看图（不经 DeepSeek）。"""
+    port = resolve_port(args)
+    view = getattr(args, "view", "scene") or "scene"
+    out = getattr(args, "out", None)
+    max_w = int(getattr(args, "width", 512) or 512)
+    max_h = int(getattr(args, "height", 512) or 512)
+    fn = "capture_scene_view" if view == "scene" else "capture_screenshot"
+    path_arg = "None" if not out else json.dumps(out)
+    code = (
+        "import importlib, json\n"
+        "import unity.screenshot as _us\n"
+        "importlib.reload(_us)\n"
+        f"r = _us.{fn}(max_width={max_w}, max_height={max_h}, save_to_file=True, path={path_arg})\n"
+        "print(json.dumps(r, ensure_ascii=False))\n"
+    )
+    status, payload = request_json("POST", "/exec", port, body={"code": code}, timeout=120.0)
+    if status == 503:
+        if args.json:
+            print_json(payload)
+        else:
+            print(payload.get("hint", "引擎不可用"), file=sys.stderr)
+        return EXIT_ENGINE
+    if status >= 400 or payload.get("error") or payload.get("ok") is False:
+        if args.json:
+            print_json(payload)
+        else:
+            print(payload.get("error") or payload.get("output") or "screenshot failed", file=sys.stderr)
+        return EXIT_EXEC if status < 400 else EXIT_HTTP
+
+    raw_out = (payload.get("output") or "").strip()
+    result: dict[str, Any] = {}
+    if raw_out:
+        # 取最后一行 JSON
+        for line in reversed(raw_out.splitlines()):
+            line = line.strip()
+            if line.startswith("{"):
+                try:
+                    result = json.loads(line)
+                    break
+                except json.JSONDecodeError:
+                    continue
+    if args.json:
+        print_json(result if result else payload)
+    else:
+        path = result.get("path")
+        if path:
+            print(f"path: {path}")
+            print(f"bytes: {result.get('bytes', '')}")
+            print(result.get("message", ""))
+        else:
+            print(raw_out or json.dumps(payload, ensure_ascii=False))
+    if result and not result.get("success", True):
+        return EXIT_EXEC
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="utagent", description="UTAgent Editor Bridge CLI")
     parser.add_argument("--port", type=int, help="Bridge 端口（默认 17861，或环境变量 UTAGENT_PORT）")
@@ -387,6 +444,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_find = scene_sub.add_parser("find", help="按名称查找对象")
     p_find.add_argument("name")
     p_find.set_defaults(func=cmd_scene_find)
+
+    p_shot = sub.add_parser(
+        "screenshot",
+        help="截图落盘（返回 path；供 Cursor Read 看图，不经 Chat/DeepSeek）",
+    )
+    p_shot.add_argument(
+        "--view",
+        choices=("scene", "game"),
+        default="scene",
+        help="scene=Scene 视图（默认）；game=Game 视图（非 Play 时回退 Scene）",
+    )
+    p_shot.add_argument("--out", help="输出 PNG 路径（默认 LOG/screenshots/shot_*.png）")
+    p_shot.add_argument("--width", type=int, default=512)
+    p_shot.add_argument("--height", type=int, default=512)
+    p_shot.set_defaults(func=cmd_screenshot)
 
     p_chat = sub.add_parser("chat", help="自然语言 ReAct 任务（等同 Chat 发话）")
     p_chat.add_argument(

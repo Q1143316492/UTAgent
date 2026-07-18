@@ -124,7 +124,8 @@ from unity.inspect import get_type_details
 ## L1 — `import unity`（动词优先）
 
 - 截图：`unity.capture_scene_view()`（勿 print 含 base64 的返回值）
-- **DeepSeek / 纯文本模型**：验收用 `find_objects` + `print`，不要为验收调截图
+- **Cursor / 能看图的模型**：`capture_scene_view(save_to_file=True)` 或 CLI `utagent screenshot` → 用返回的 `path` 做目检
+- **DeepSeek / 纯文本模型**：验收用 `find_objects` + `print`，不要为验收调截图；默认 `__image` 会被剥离不送入 LLM
 - 层级：`unity.find_object` / `unity.find_objects` / `unity.get_hierarchy`（`components` 含 `shortName` + `fullName`）
 - 销毁：`unity.destroy_object` / `unity.prepare_scene_object` / `unity.destroy_all_objects`
 - 镜头：`unity.scene_view_*` / `unity.focus_scene_view_on`
