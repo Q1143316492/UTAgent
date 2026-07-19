@@ -14,7 +14,7 @@ Editor 拼/改 Canvas UI、布局、预制体。
 
 ## 命名 v2
 
-`Wnd*` / `Btn*` / `Txt*` / `Panel*` / `Input*` + **英文 PascalCase**（如 `TxtSkillDesc`、`PanelSkillRow1`）。  
+`Wnd*` / `Btn*` / `Txt*` / `Panel*` / `Input*` / `Toggle*` / `Slider*` / `Row*` + **英文 PascalCase**（如 `TxtSkillDesc`、`PanelSkillRow1`）。  
 按钮内文案节点固定名 `TxtLabel`。  
 **禁止** `*Go`、裸 `Button`、`Test*`。  
 **禁止**对象名含 emoji / 特殊符号 / 空格 / 中文——展示文案（含 ✦❄ 等）只写在 `TMP.text`，**不要**写进 `GameObject.name`。  

@@ -56,8 +56,11 @@ BENCHMARK_ASSERTS = {
     "C09": ("GetComponents", None, "inject reminder"),  # heavy-reflection
     "C10": ("WndSettings", None, None),  # 反复守卫后 reminder_in_llm ≤ 1
     "C11": ("childControl", None, "inject reminder"),  # layout-control
+    "C16": ("os.walk", None, "inject reminder"),  # fs-walk
     "C12": ("print", None, None),  # after-tool truncate
     "C13": ("盲找", None, None),  # after-tool no-progress
+    "C14": ("WndLogin", "editor-ui", None),  # 登录面板
+    "C15": ("WndCharacter", "editor-ui", None),  # 角色面板（复杂布局）
 }
 
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text.RegularExpressions;
 using Debug = UnityEngine.Debug;
 
@@ -8,35 +8,96 @@ namespace UTAgent.Editor.Agent
     {
         // ----- before-exec 域校验（对齐 Pi beforeToolCall 扩展点） -----
 
-        // 强信号：Wnd* 命名
+        /// <summary>
+        /// UI 强信号：Wnd* 命名。
+        /// </summary>
         private static readonly Regex sWndName = new Regex(@"\bWnd[A-Z]", RegexOptions.Compiled);
-        // 强信号：TMP UI 类型
-        private static readonly Regex sTmpTypes = new Regex(@"TMP_InputField|TextMeshProUGUI", RegexOptions.Compiled);
-        // 强信号：AddComponent(UI 组件)
+
+        /// <summary>
+        /// UI 强信号：TMP 控件类型。
+        /// </summary>
+        private static readonly Regex sTmpTypes = new Regex(
+            @"TMP_InputField|TextMeshProUGUI",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// UI 强信号：AddComponent(常见 UI 组件)。
+        /// </summary>
         private static readonly Regex sUiComponentAdd = new Regex(
             @"AddComponent\([^)]*(Image|Button|VerticalLayoutGroup|HorizontalLayoutGroup|LayoutGroup|Toggle|Slider|ScrollRect|Dropdown|TMP_InputField|TextMeshProUGUI)",
             RegexOptions.Compiled);
-        // RectTransform 锚点操作（需与 Canvas 共现才算强信号）
-        private static readonly Regex sRectAnchor = new Regex(@"anchorMin|anchorMax|sizeDelta|anchoredPosition", RegexOptions.Compiled);
-        // Canvas 字样
+
+        /// <summary>
+        /// RectTransform 锚点/尺寸操作（须与 Canvas 共现才算 UI 强信号）。
+        /// </summary>
+        private static readonly Regex sRectAnchor = new Regex(
+            @"anchorMin|anchorMax|sizeDelta|anchoredPosition",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// Canvas 字样。
+        /// </summary>
         private static readonly Regex sCanvasOp = new Regex(@"\bCanvas\b", RegexOptions.Compiled);
-        // 弱信号：UI 命名前缀（需与 Canvas 或 AddComponent(UI 组件) 共现）
-        private static readonly Regex sUiNamePrefix = new Regex(@"\b(Btn|Txt|Panel|Input)[A-Z]", RegexOptions.Compiled);
-        // 排查域信号
+
+        /// <summary>
+        /// UI 弱信号：Btn/Txt/Panel/Input 前缀（须与 Canvas 或 UI AddComponent 共现）。
+        /// </summary>
+        private static readonly Regex sUiNamePrefix = new Regex(
+            @"\b(Btn|Txt|Panel|Input)[A-Z]",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// 排查域：describe_go 原语。
+        /// </summary>
         private static readonly Regex sDescribeGo = new Regex(@"describe_go", RegexOptions.Compiled);
-        // 重型全量反射黑名单：GetComponents(typeof(Component)) / GetComponents(CS.UnityEngine.Component) 及 InParent/InChildren 变体（不拦指定类型如 GetComponents(Image)）
+
+        /// <summary>
+        /// 重型全量反射：GetComponents(typeof(Component)) / GetComponents(...Component) 及 InParent/InChildren。
+        /// 不拦指定类型如 GetComponents(Image)。
+        /// </summary>
         private static readonly Regex sHeavyReflection = new Regex(
             @"GetComponents(?:InParent|InChildren)?\(\s*(?:typeof\s*\(\s*Component\s*\)|(?:[A-Za-z_][A-Za-z0-9_.]*\.)?Component\s*)(?:,[^)]*)?\)",
             RegexOptions.Compiled);
-        // 单步代码体积上限（防 ReAct 雪球长脚本）
+
+        /// <summary>
+        /// 危险磁盘递归：os.walk(…)。主线程扫盘易卡住 Editor。
+        /// </summary>
+        private static readonly Regex sOsWalk = new Regex(@"os\.walk\s*\(", RegexOptions.Compiled);
+
+        /// <summary>
+        /// 危险磁盘递归：Path.rglob(…) / .rglob(…)。
+        /// </summary>
+        private static readonly Regex sPathRglob = new Regex(@"\.rglob\s*\(", RegexOptions.Compiled);
+
+        /// <summary>
+        /// 危险磁盘递归：glob.glob/iglob(…, recursive=True)。
+        /// </summary>
+        private static readonly Regex sGlobRecursive = new Regex(
+            @"glob\.(?:glob|iglob)\s*\([^)]*recursive\s*=\s*True",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// 单步代码体积上限（防 ReAct 雪球长脚本）。
+        /// </summary>
         private const int kCodeSizeLimit = 4000;
-        // LayoutGroup 创建：须同段设置 childControlWidth/Height（防零宽塌陷）
+
+        /// <summary>
+        /// LayoutGroup 创建（项目配方：同段须设 childControl*）。
+        /// </summary>
         private static readonly Regex sAddLayoutGroup = new Regex(
             @"AddComponent\([^)]*(?:Vertical|Horizontal|Grid)?LayoutGroup",
             RegexOptions.Compiled);
+
+        /// <summary>
+        /// LayoutGroup.childControlWidth 赋值。
+        /// </summary>
         private static readonly Regex sChildControlWidth = new Regex(
             @"childControlWidth\s*=",
             RegexOptions.Compiled);
+
+        /// <summary>
+        /// LayoutGroup.childControlHeight 赋值。
+        /// </summary>
         private static readonly Regex sChildControlHeight = new Regex(
             @"childControlHeight\s*=",
             RegexOptions.Compiled);
@@ -66,6 +127,15 @@ namespace UTAgent.Editor.Agent
             {
                 InjectReminder(turn, "禁止全量反射 GetComponents(typeof(Component))，用 describe_go 或指定具体类型（如 GetComponents(Image)）。");
                 LogBeforeExec(turn, "heavy-reflection", "-", "inject reminder");
+                return false;
+            }
+
+            // 文件系统危险遍历：os.walk / rglob / 递归 glob（主线程扫盘易卡住 Editor）
+            if (sOsWalk.IsMatch(code) || sPathRglob.IsMatch(code) || sGlobRecursive.IsMatch(code))
+            {
+                InjectReminder(turn,
+                    "禁止 os.walk / Path.rglob / 递归 glob 扫描磁盘（易卡住 Editor）。查找资源请用 CS.UnityEditor.AssetDatabase.FindAssets 或 LoadAssetAtPath。");
+                LogBeforeExec(turn, "fs-walk", "-", "inject reminder");
                 return false;
             }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -67,8 +67,7 @@ namespace UTAgent.Editor.Agent
         }
 
         /// <summary>
-        /// 异步发送一条消息（可选附带图片）。onResponse 在主线程最终触发一次；
-        /// onProgress 每次状态推进触发（SSE 流式时每收到 delta 文字即触）。全程不阻塞主线程。
+        /// 开一轮对话：建 TurnState → PrepareNextRequest →（流式）HandleStreamDone。
         /// </summary>
         public void SendMessageAsync(string text, string imagePath,
             TurnResponseHandler onResponse,
@@ -245,7 +244,7 @@ namespace UTAgent.Editor.Agent
             return ParseInt(output);
         }
 
-        // ----- 内部：LLM 请求准备 -----
+        // ----- 内部：组 LLM messages / compaction / 发请求（路标：doc 21 §3.1）-----
 
         private bool PrepareNextRequest(TurnState turn)
         {
@@ -452,6 +451,9 @@ namespace UTAgent.Editor.Agent
             }
         }
 
+        /// <summary>
+        /// 流结束分支：错误 / 纯文本 FinishTurn / tool_calls → ExecuteToolCalls。
+        /// </summary>
         private void HandleStreamDone(TurnState turn)
         {
             var req = turn.Operation.webRequest;
@@ -600,7 +602,7 @@ namespace UTAgent.Editor.Agent
         }
 
         /// <summary>
-        /// 执行 tool_calls：execPython → execute_python_code → append_tool_result → 下一轮 LLM。
+        /// tool 调度：BeforeExecCheck → load_skill|execute_python_code → AfterToolProcess → append → 再 Prepare。
         /// </summary>
         private void ExecuteToolCalls(TurnState turn, string toolCallsJson)
         {

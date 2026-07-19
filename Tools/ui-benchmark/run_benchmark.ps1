@@ -1,23 +1,62 @@
-# UI 拼装验收基准一键脚本
-# 用法：
-#   ./run_benchmark.ps1              # 仅 L1（exec --file），省 LLM API
-#   ./run_benchmark.ps1 -L2           # L1 + L2（chat 全用例）
-#   ./run_benchmark.ps1 -L2 -Cases C02,C09   # L1 + 指定 L2 用例
-# 退出码：全绿 0，任一失败非 0。
+﻿# UI 拼装验收 — 两档入口（无全量）
+#   ./run_benchmark.ps1                 # 日常 L1：E16/E17 门禁冒烟（无面板 golden）
+#   ./run_benchmark.ps1 -L2Only         # 日常 L2：C02+C14+C15（chat 拼 UI；health 后 export）
+#   ./run_benchmark.ps1 -L2             # 日常 L1 + L2
+#   ./run_benchmark.ps1 -L2Only -Cases C15
+#   ./run_benchmark.ps1 -L1Only -Cases E12
+# 正式拼 UI = L2；面板 golden 已归档。退出码：全绿 0，任一失败非 0。
+# 加测约定见 README.md / suite_map.json
 
 param(
     [switch]$L2,
     [switch]$L1Only,
-    [string]$Cases = "C01,C02,C03,C04,C06,C07,C08,C09,C10,C11,C12,C13"
+    [switch]$L2Only,
+    [switch]$FullDev,
+    [string]$Cases = ""
 )
 
 $ErrorActionPreference = "Stop"
 $env:PYTHONIOENCODING = "utf-8"
 
+if ($FullDev) {
+    Write-Host "ERROR: -FullDev 已废除（无全量流程）。日常用默认入口；按需用 -Cases <ID>" -ForegroundColor Red
+    Write-Host "  见 Assets/UTAgent/Tools/ui-benchmark/README.md" -ForegroundColor Yellow
+    exit 2
+}
+
+if ($L1Only -and $L2Only) {
+    Write-Host "ERROR: -L1Only 与 -L2Only 互斥" -ForegroundColor Red
+    exit 2
+}
+
+$runL1 = -not $L2Only
+$runL2 = $L2Only -or ($L2 -and -not $L1Only)
+
 $Root = (Resolve-Path "$PSScriptRoot/../../../..").Path
 $Cli = Join-Path $Root "Assets/UTAgent/Tools/utagent-cli/utagent.py"
-$BenchDir = Join-Path $Root "Assets/UTAgent/Tools/ui-benchmark"
+$BenchDir = $PSScriptRoot
 $LogDir = Join-Path $Root "Assets/UTAgent/LOG"
+$TmpDir = Join-Path $BenchDir ".tmp"
+$ExportReq = Join-Path $TmpDir "_export_root.txt"
+$MapPath = Join-Path $BenchDir "suite_map.json"
+
+$map = Get-Content -Raw -Path $MapPath -Encoding UTF8 | ConvertFrom-Json
+$DailyL1 = @($map.daily_l1)
+$DailyL2 = @($map.daily_l2)
+
+$caseList = @()
+if (-not [string]::IsNullOrWhiteSpace($Cases)) {
+    $caseList = $Cases -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+$extraL1 = @($caseList | Where-Object { $_ -like "E*" })
+$l2Cases = @($caseList | Where-Object { $_ -like "C*" })
+if ($runL2 -and $l2Cases.Count -eq 0 -and [string]::IsNullOrWhiteSpace($Cases)) {
+    $l2Cases = $DailyL2
+}
+# -Cases 只含 E* 时不跑 L2；只含 C* 且未 -L1Only 时仍可跑日常 L1
+if ($runL2 -and $l2Cases.Count -eq 0 -and $extraL1.Count -gt 0) {
+    $runL2 = $false
+}
 
 function Invoke-Utagent {
     param([string[]]$CmdArgs)
@@ -34,6 +73,27 @@ function Get-JsonLine {
     if ($line) { $line | ConvertFrom-Json } else { $null }
 }
 
+function Clear-UiRoots {
+    param([string[]]$Names)
+    $namesLit = ($Names | ForEach-Object { "'$_'" }) -join ", "
+    $code = @"
+import os, sys
+_bench = os.path.join('Assets', 'UTAgent', 'Tools', 'ui-benchmark')
+for p in (os.path.abspath(_bench),):
+    if p not in sys.path: sys.path.insert(0, p)
+import ui_panel_scope as scope
+print(scope.destroy_named_roots($namesLit))
+"@
+    Invoke-Utagent -CmdArgs @("exec", "--code", $code) | Out-Null
+}
+
+function Resolve-L1Script {
+    param([string]$Id)
+    $rel = $map.l1_scripts.$Id
+    if (-not $rel) { return $null }
+    return (Join-Path $BenchDir $rel)
+}
+
 $results = [System.Collections.Generic.List[pscustomobject]]::new()
 
 function Add-Result {
@@ -43,7 +103,76 @@ function Add-Result {
     Write-Host "  [$mark] $Id : $Detail"
 }
 
-# ---- Step 1: ping / init ----
+function Export-L1Fixture {
+    param([string]$Id)
+    $root = $null
+    if ($map.l1_export_roots -and $map.l1_export_roots.PSObject.Properties.Name -contains $Id) {
+        $root = [string]$map.l1_export_roots.$Id
+    }
+    if ([string]::IsNullOrWhiteSpace($root)) { return }
+    if (-not (Test-Path $TmpDir)) { New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null }
+    [System.IO.File]::WriteAllText($ExportReq, $root + "`n", [System.Text.UTF8Encoding]::new($false))
+    $eout = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "export_ui_panel_prefab.py"))
+    $ej = Get-JsonLine -Text $eout
+    if ($ej) {
+        Add-Result -Id "$Id-export" -Ok ($ej.ok -eq $true) -Detail "path=$($ej.path) overwritten=$($ej.overwritten)"
+    } else {
+        Add-Result -Id "$Id-export" -Ok $false -Detail "parse fail"
+    }
+}
+
+function Invoke-L1Case {
+    param([string]$Id)
+    $script = Resolve-L1Script -Id $Id
+    if (-not $script -or -not (Test-Path $script)) {
+        Add-Result -Id $Id -Ok $false -Detail "no script in suite_map"
+        return
+    }
+    $out = Invoke-Utagent -CmdArgs @("exec", "--file", $script)
+    $j = Get-JsonLine -Text $out
+    $ok = $false
+    $detail = "parse fail"
+    switch ($Id) {
+        "E01" {
+            if ($j) { $ok = $j.has_button -eq $true -and $j.has_tmp_on_label -eq $true; $detail = "btn=$($j.btn_name)" }
+        }
+        "E02" {
+            if ($j) { $ok = $j.has_vertical_layout_group -eq $true; $detail = "vlg=$($j.has_vertical_layout_group)" }
+        }
+        "E03" {
+            if ($j) { $ok = $j.count -eq 1; $detail = "count=$($j.count)" }
+        }
+        "E04" {
+            if ($j) { $ok = @($j.bad).Count -eq 0; $detail = "bad=$($j.bad -join ',')" }
+        }
+        "E09" {
+            if ($j) { $ok = $j.ok -eq $true; $detail = "reminder=$($j.reminder_count)" }
+        }
+        "E10" {
+            if ($j) { $ok = $j.ok -eq $true; $detail = "hist=$($j.history_len_after_load)" }
+        }
+        "E11" {
+            if ($j) { $ok = $j.ok -eq $true; $detail = "kind=$($j.compaction_kind_present)" }
+        }
+        "E12" {
+            if ($j) { $ok = $j.ok -eq $true; $detail = "violations=$(@($j.zero_width_violations).Count)" }
+        }
+        "E16" {
+            if ($j) { $ok = $j.ok -eq $true; $detail = "non_ascii=$($j.non_ascii_name_fails)" }
+        }
+        "E17" {
+            if ($j) { $ok = $j.ok -eq $true; $detail = "bad_fails=$($j.bad_btn_fails)" }
+        }
+        default {
+            if ($j -and ($null -ne $j.ok)) { $ok = $j.ok -eq $true; $detail = "ok=$($j.ok)" }
+            elseif ($j) { $ok = $true; $detail = "ran" }
+        }
+    }
+    Add-Result -Id $Id -Ok $ok -Detail $detail
+    # 若仍登记在 l1_export_roots（一般为空；面板 fixtures 改由 L2 export）
+    if ($ok) { Export-L1Fixture -Id $Id }
+}
+
 Write-Host "[1/4] ping utagent..."
 $ping = Invoke-Utagent -CmdArgs @("ping")
 if ($ping -notmatch "engine_available: True") {
@@ -56,97 +185,27 @@ if ($ping -notmatch "engine_available: True") {
     exit 1
 }
 Write-Host "  engine_available: True"
+Write-Host "  suite tier: daily (no FullDev)"
 
-# ---- Step 2: L1 结构用例 ----
-Write-Host "[2/4] L1 结构用例 (utagent exec --file)..."
+# ---- L1 ----
+if ($runL1) {
+    $l1Ids = [System.Collections.Generic.List[string]]::new()
+    # 若 -Cases 带了 E*：只跑这些 E；否则日常门禁
+    if ($extraL1.Count -gt 0) {
+        Write-Host "[2/4] L1 按需 ($($extraL1 -join ','))..."
+        foreach ($id in $extraL1) { [void]$l1Ids.Add($id) }
+    } else {
+        Write-Host "[2/4] L1 日常 ($($DailyL1 -join ','))..."
+        foreach ($id in $DailyL1) { [void]$l1Ids.Add($id) }
+    }
+    foreach ($id in $l1Ids) { Invoke-L1Case -Id $id }
+} else {
+    Write-Host "[2/4] L1 跳过（-L2Only）"
+}
 
-# E01 TMP 按钮
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "golden_path_tmp_button.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    $ok = $j.has_button -eq $true -and $j.has_tmp_on_label -eq $true
-    Add-Result -Id "E01" -Ok $ok -Detail "btn=$($j.btn_name) has_button=$($j.has_button) has_tmp=$($j.has_tmp_on_label)"
-} else { Add-Result -Id "E01" -Ok $false -Detail "parse fail" }
-
-# E02 面板
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "golden_path_layout_panel.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    $ok = $j.has_vertical_layout_group -eq $true -and $j.save_scene_ok -eq $true
-    Add-Result -Id "E02" -Ok $ok -Detail "vlg=$($j.has_vertical_layout_group) save=$($j.save_scene_ok)"
-} else { Add-Result -Id "E02" -Ok $false -Detail "parse fail" }
-
-# E03 幂等：再跑一次 layout_panel，查 WndDemo count
-Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "golden_path_layout_panel.py")) | Out-Null
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_count_wnddemo.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    Add-Result -Id "E03" -Ok ($j.count -eq 1) -Detail "WndDemo count=$($j.count)"
-} else { Add-Result -Id "E03" -Ok $false -Detail "parse fail" }
-
-# E04 命名
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_naming_wnddemo.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    $badCount = @($j.bad).Count
-    Add-Result -Id "E04" -Ok ($badCount -eq 0) -Detail "bad names=$($j.bad -join ',')"
-} else { Add-Result -Id "E04" -Ok $false -Detail "parse fail" }
-
-# E08 settings form
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "golden_path_settings_form.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    $ok = $j.row_count -ge 2 -and $j.button_count -eq 2 -and $j.has_vlg -eq $true
-    Add-Result -Id "E08" -Ok $ok -Detail "row=$($j.row_count) btn=$($j.button_count) vlg=$($j.has_vlg)"
-} else { Add-Result -Id "E08" -Ok $false -Detail "parse fail" }
-
-# E08 幂等
-Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "golden_path_settings_form.py")) | Out-Null
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_count_wndsettings.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    Add-Result -Id "E08-idem" -Ok ($j.count -eq 1) -Detail "WndSettings count=$($j.count)"
-} else { Add-Result -Id "E08-idem" -Ok $false -Detail "parse fail" }
-
-# E05/E06/E07：无独立脚本，标记 skip
-Add-Result -Id "E05" -Ok $true -Detail "SKIP (describe_go 无独立脚本，见 align change verification)"
-Add-Result -Id "E06" -Ok $true -Detail "SKIP (add_to_layout 无独立脚本，见 editor-ui-layout-primitives verification)"
-Add-Result -Id "E07" -Ok $true -Detail "SKIP (add_free_child 无独立脚本，见 editor-ui-layout-primitives verification)"
-
-# E09 convert_to_llm reminder 过滤
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_convert_to_llm_e09.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    Add-Result -Id "E09" -Ok ($j.ok -eq $true) -Detail "reminder_count=$($j.reminder_count) last=$($j.last_reminder)"
-} else { Add-Result -Id "E09" -Ok $false -Detail "parse fail" }
-
-# E10 loadSkill/emit_progress 不进 history
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_history_no_progress_e10.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    Add-Result -Id "E10" -Ok ($j.ok -eq $true) -Detail "history_after_load=$($j.history_len_after_load) status_in_history=$($j.status_in_history)"
-} else { Add-Result -Id "E10" -Ok $false -Detail "parse fail" }
-
-# E11 LLM compaction kind + needs_compaction 信号
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_compaction_e11.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    Add-Result -Id "E11" -Ok ($j.ok -eq $true) -Detail "kind=$($j.compaction_kind_present) llm=$($j.compaction_in_llm) needs=$($j.needs_compaction)"
-} else { Add-Result -Id "E11" -Ok $false -Detail "parse fail" }
-
-# E12 Layout 零宽（面板 + 输入框）
-$out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_layout_zero_width_e12.py"))
-$j = Get-JsonLine -Text $out
-if ($j) {
-    $v = $j.zero_width_violations
-    $vc = if ($null -eq $v) { 0 } else { @($v).Count }
-    Add-Result -Id "E12" -Ok ($j.ok -eq $true) -Detail "violations=$vc root=$($j.root_name)"
-} else { Add-Result -Id "E12" -Ok $false -Detail "parse fail" }
-
-# ---- Step 3: L2 行为用例（可选） ----
-if ($L2 -and -not $L1Only) {
-    Write-Host "[3/4] L2 行为用例 (utagent chat)..."
-    $caseList = $Cases -split "," | ForEach-Object { $_.Trim() }
+# ---- L2 ----
+if ($runL2) {
+    Write-Host "[3/4] L2 Cases=$($l2Cases -join ',')..."
     $prompts = @{
         C01 = "Canvas 下创建一个 TMP 按钮 BtnStart，文案 Start"
         C02 = "创建设置面板 WndSettings，标题设置，两个 row（音乐/音效），底部保存/取消按钮"
@@ -160,11 +219,24 @@ if ($L2 -and -not $L1Only) {
         C11 = "禁止 loadSkill。必须实际调用一次 execPython（不要凭记忆回答），code 一字不差：`nfrom unity_bind import CS`ng=CS.UnityEngine.GameObject('PanelLayoutC11')`nc=CS.UnityEngine.GameObject.Find('Canvas')`ng.transform.SetParent(c.transform, False)`ng.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)`nprint('c11')`n若被 before-exec 拦截请停止并说明守卫名。"
         C12 = "禁止 loadSkill。必须实际调用一次 execPython（不要凭记忆回答），code 一字不差：`nprint('A' * 12000)`n然后用一句话说明已执行。不要做别的。"
         C13 = "禁止 loadSkill、禁止创建任何对象。必须实际连续至少 3 次 execPython（不要凭记忆），每次 code 仅：`nimport unity`nprint(unity.find_objects('BtnDoesNotExistC13', echo=False))`n找不存在的 BtnDoesNotExistC13。若 after-tool 注入无进展提醒可停止并说明。"
+        C14 = "创建登录面板 WndLogin，标题登录，账号与密码两个输入行，底部登录/取消按钮。节点名用英文前缀 PascalCase，中文只写在文案里。"
+        C15 = "创建角色面板 WndCharacter（不是新建角色流程）：标题角色；头像区+姓名/等级/职业；属性行生命/魔力/攻击/防御；三个装备槽按钮；底部关闭。节点名英文前缀 PascalCase，中文只写在文案里。"
     }
-    foreach ($c in $caseList) {
+    $uiHealthRoots = @{
+        C01 = "BtnStart"; C02 = "WndSettings"; C06 = "BtnTest"; C07 = "WndSettings"
+        C10 = "WndSettings"; C14 = "WndLogin"; C15 = "WndCharacter"
+    }
+    $uiExportRoots = @{ C02 = "WndSettings"; C14 = "WndLogin"; C15 = "WndCharacter" }
+    $uiClearRoots = @{
+        C01 = @("BtnStart"); C02 = @("WndSettings", "WndLogin", "WndCharacter"); C06 = @("BtnTest")
+        C07 = @("WndSettings"); C10 = @("WndSettings", "WndLogin", "WndCharacter")
+        C14 = @("WndLogin", "WndSettings", "WndCharacter"); C15 = @("WndCharacter", "WndLogin", "WndSettings")
+    }
+    foreach ($c in $l2Cases) {
         if (-not $prompts.ContainsKey($c)) { Add-Result -Id $c -Ok $false -Detail "未知用例"; continue }
-        # 清空 history，避免跨用例记忆污染（C11 等依赖真实 before-exec）
         Invoke-Utagent -CmdArgs @("exec", "--code", "import agent; agent.clear_history()") | Out-Null
+        $clearNames = $uiClearRoots[$c]
+        if ($null -ne $clearNames) { Clear-UiRoots -Names $clearNames }
         Write-Host "  chat $c ..."
         Invoke-Utagent -CmdArgs @("chat", $prompts[$c], "--compact") | Out-Null
         $log = Get-LatestLog
@@ -177,12 +249,42 @@ if ($L2 -and -not $L1Only) {
             $ok = $aout -match '"ok":\s*true'
             Add-Result -Id $c -Ok $ok -Detail "assert parse fallback"
         }
+
+        $healthRoots = $uiHealthRoots[$c]
+        if ($null -ne $healthRoots) {
+            $env:UTAGENT_HEALTH_ROOTS = $healthRoots
+            $hout = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_ui_scene_health.py"))
+            Remove-Item Env:UTAGENT_HEALTH_ROOTS -ErrorAction SilentlyContinue
+            $hj = Get-JsonLine -Text $hout
+            $hOk = $false
+            if ($hj) {
+                $hOk = $hj.ok -eq $true
+                $integ = ""
+                if ($null -ne $hj.integrity_ok) {
+                    $integ = " integ=$($hj.integrity_ok)"
+                }
+                Add-Result -Id "$c-health" -Ok $hOk -Detail "outside=$($hj.outside_canvas_count) zero=$($hj.zero_size_count) miss_pref=$($hj.missing_preferred_count)$integ"
+            } else {
+                Add-Result -Id "$c-health" -Ok $false -Detail "parse fail"
+            }
+            $exportRoot = $uiExportRoots[$c]
+            if ($hOk -and ($null -ne $exportRoot)) {
+                if (-not (Test-Path $TmpDir)) { New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null }
+                [System.IO.File]::WriteAllText($ExportReq, $exportRoot + "`n", [System.Text.UTF8Encoding]::new($false))
+                $eout = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "export_ui_panel_prefab.py"))
+                $ej = Get-JsonLine -Text $eout
+                if ($ej) {
+                    Add-Result -Id "$c-export" -Ok ($ej.ok -eq $true) -Detail "path=$($ej.path)"
+                } else {
+                    Add-Result -Id "$c-export" -Ok $false -Detail "parse fail"
+                }
+            }
+        }
     }
 } else {
-    Write-Host "[3/4] L2 跳过（用 -L2 启用 chat 用例）"
+    Write-Host "[3/4] L2 跳过（用 -L2 或 -L2Only；按需 -Cases C*）"
 }
 
-# ---- Step 4: 解析最近 log + 摘要 ----
 Write-Host "[4/4] 解析最近 log..."
 $log = Get-LatestLog
 if ($log) {
@@ -190,22 +292,21 @@ if ($log) {
     try {
         $p = $pout | ConvertFrom-Json
         Write-Host "  log: $log"
-        Write-Host "  turns=$($p.turns.Count) loadSkill=$($p.loadSkill_calls.Count) exec_steps=$($p.exec_steps) before_exec=$($p.before_exec_decisions.Count) warnings=$($p.parse_warnings.Count)"
-        if ($p.parse_warnings.Count -gt 0) {
-            Write-Host "  parse_warnings:" -ForegroundColor Yellow
-            $p.parse_warnings | ForEach-Object { Write-Host "    $_" }
-        }
+        Write-Host "  turns=$($p.turns.Count) loadSkill=$($p.loadSkill_calls.Count) exec_steps=$($p.exec_steps)"
     } catch { Write-Host "  log 解析失败: $_" -ForegroundColor Yellow }
 }
 
-# ---- 摘要 ----
 Write-Host ""
 Write-Host "===== 摘要 ====="
 $pass = @($results | Where-Object { $_.Ok -eq $true }).Count
 $fail = @($results | Where-Object { $_.Ok -eq $false }).Count
+$total = $pass + $fail
+$rate = if ($total -gt 0) { [math]::Round(100.0 * $pass / $total, 1) } else { 0 }
 $results | Format-Table -AutoSize
-Write-Host "PASS=$pass FAIL=$fail"
+Write-Host ("PASS={0} FAIL={1} TOTAL={2} RATE={3}% tier=daily" -f $pass, $fail, $total, $rate)
 if ($fail -gt 0) {
+    $failedIds = @($results | Where-Object { $_.Ok -eq $false } | ForEach-Object { $_.ID }) -join ", "
+    Write-Host "FAILED IDs: $failedIds" -ForegroundColor Red
     Write-Host "BENCHMARK FAILED" -ForegroundColor Red
     exit 1
 }

@@ -149,6 +149,7 @@ L2 仍经 `UnityBindWhitelist` 过滤；**不代表** L3 exec 受同一白名单
 
 - `CS.GameCore.WindowBase` 等业务类型可用（程序集已在 Unity 域）
 - `CS.UnityEditor.MonoScript` / `AssetDatabase` / `PrefabUtility` 等长尾 Editor API 可用
+- **找资源**用 `AssetDatabase.FindAssets` / `LoadAssetAtPath`；禁止 `os.walk` / `Path.rglob` / 递归 `glob` 扫 `Assets`
 - 场景已有 `Canvas` 时 **不要** 再新建第二个 Canvas
 - Edit Mode 实例化 prefab：`CS.UnityEditor.PrefabUtility.InstantiatePrefab(asset)`
 - 创建类脚本末行用 `print(...)` / `unity.save_scene()`

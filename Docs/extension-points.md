@@ -30,7 +30,7 @@ Schema：`Editor/Agent/Loop/UTAgentRunner.Json.cs`
 
 | 钩子 | 文件 | 调用点 |
 |------|------|--------|
-| before-exec | `UTAgentRunner.BeforeExec.cs` | `execPython` 执行前 `BeforeExecCheck` |
+| before-exec | `UTAgentRunner.BeforeExec.cs` | `execPython` 执行前 `BeforeExecCheck`（含 code-too-long / heavy-reflection / **fs-walk** / layout-control / skill 门） |
 | after-tool（截断等） | `UTAgentRunner.AfterTool.cs` | append tool result 前 `AfterToolProcess` |
 | after-tool no-progress | `UTAgentRunner.AfterTool.NoProgress.cs` | AfterTool 链路内调用 |
 

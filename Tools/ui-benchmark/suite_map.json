@@ -1,0 +1,18 @@
+{
+  "daily_l1": ["E16", "E17"],
+  "daily_l2": ["C02", "C14", "C15"],
+  "l1_scripts": {
+    "E01": "opt-in/golden_path_tmp_button.py",
+    "E02": "opt-in/golden_path_layout_panel.py",
+    "E03": "opt-in/assert_count_wnddemo.py",
+    "E04": "opt-in/assert_naming_wnddemo.py",
+    "E09": "opt-in/assert_convert_to_llm_e09.py",
+    "E10": "opt-in/assert_history_no_progress_e10.py",
+    "E11": "opt-in/assert_compaction_e11.py",
+    "E12": "opt-in/assert_layout_zero_width_e12.py",
+    "E16": "assert_ui_naming_smoke.py",
+    "E17": "assert_ui_layout_size_smoke.py"
+  },
+  "l1_export_roots": {},
+  "notes": "Formal UI assembly = L2 chat (daily_l2). Panel golden archived; do not put back into daily_l1. Fixtures export after L2 health PASS. Gate smokes may stay in daily_l1. Hooks/primitives via opt-in + -Cases."
+}
