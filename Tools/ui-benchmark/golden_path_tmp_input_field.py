@@ -3,7 +3,7 @@ import json
 import unity
 from unity_bind import CS
 
-def create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="GrpBody", preferred_h=40):
+def create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="PanelBody", preferred_h=40):
     input_name = f"Input{purpose}"
     unity.prepare_scene_object(input_name)
     parent = CS.UnityEngine.GameObject.Find(parent_name)
@@ -71,5 +71,5 @@ def create_tmp_input_field(purpose, placeholder_text, password=False, parent_nam
 purpose = "Account"
 placeholder_text = "账号"
 password = False
-parent_name = "GrpBody"
+parent_name = "PanelBody"
 print(json.dumps(create_tmp_input_field(purpose, placeholder_text, password, parent_name), ensure_ascii=False))

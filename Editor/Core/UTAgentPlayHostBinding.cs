@@ -1,10 +1,9 @@
-﻿using UTAgent.Editor.Core;
 using UTAgent.Editor.PythonInterop;
 
-namespace UTAgent.Editor.PlayBinding
+namespace UTAgent.Editor.Core
 {
     /// <summary>
-    /// 将 Editor 侧 Python 引擎实现注入 <see cref="UTAgentPlayHost"/>。
+    /// 将 Editor 侧 Python 引擎实现注入 <see cref="UTAgentPlayHost"/>（Runtime→Editor 接线）。
     /// </summary>
     [UnityEditor.InitializeOnLoad]
     public static class UTAgentPlayHostBinding

@@ -2,8 +2,8 @@
 name: utagent-env-bootstrap
 description: >-
   初始化 UTAgent 本机环境：下载 embeddable CPython 到 PythonHome、
-  复制 ide-skills 到 Cursor .cursor/skills、API Key 与 Settings 一键初始化引擎。
-  用于新克隆项目、新电脑、PythonHome 缺失、Cursor 无 utagent skill 等场景。
+  复制 agent-skills 到当前编码助手的 skills 目录、API Key 与 Settings 初始化引擎。
+  用于新克隆项目、新电脑、PythonHome 缺失、缺少 utagent-unity-exec 等场景。
 ---
 
 # UTAgent 环境初始化
@@ -24,14 +24,20 @@ description: >-
 # 1) 下载官方 embeddable 3.12 → Assets/UTAgent/PythonHome/
 ./Assets/UTAgent/Tools/bootstrap/Install-PythonHome.ps1
 
-# 2) 复制 IDE skill → 本工作区 .cursor/skills/（Cursor）
+# 2) 复制编码助手 skill（默认 → 工作区 .cursor/skills/）
 ./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1
 ```
 
-覆盖已有 Cursor skill：
+覆盖已有 skill：
 
 ```powershell
 ./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1 -Force
+```
+
+其它工具可改目标目录，例如：
+
+```powershell
+./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1 -DestRel ".claude/skills" -Force
 ```
 
 ## 手动：PythonHome
@@ -40,12 +46,13 @@ description: >-
 2. 解压到 `Assets/UTAgent/PythonHome/`（目录内应有 `python312.dll`）  
 3. 勿拷完整 Anaconda / 带大量 site-packages 的安装树  
 
-## 手动：Cursor skills
+## 手动：编码助手 skills
 
-把 `Assets/UTAgent/ide-skills/` 下每个子目录（如 `utagent-unity-verify`）复制到：
+把 `Assets/UTAgent/agent-skills/` 下每个子目录（如 `utagent-unity-exec`）复制到当前工具约定的 skills 目录，例如：
 
 ```
-<工作区根>/.cursor/skills/<skill名>/
+<工作区根>/.cursor/skills/<skill名>/     # Cursor
+# Claude Code / 其它：按其文档放置
 ```
 
 ## API Key
@@ -80,6 +87,6 @@ $env:UTAGENT_API_KEY = "sk-..."
 | 路径 | 用途 |
 |------|------|
 | `Assets/UTAgent/PythonHome/` | 嵌入式 CPython（gitignore） |
-| `Assets/UTAgent/ide-skills/` | 可复制到 Cursor 的 skill 源 |
+| `Assets/UTAgent/agent-skills/` | 编码助手 skill 源（非 Editor loadSkill） |
 | `Assets/UTAgent/Docs/skills/utagent-env-bootstrap/` | 本 skill |
 | `Assets/UTAgent/Tools/bootstrap/` | 安装脚本 |

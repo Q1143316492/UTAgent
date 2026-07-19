@@ -20,9 +20,7 @@ namespace UTAgent.Editor.RemoteCli
     [InitializeOnLoad]
     public static partial class UTAgentEditorHttpServer
     {
-        public const string PrefKeyEnabled = UTAgentPrefs.BridgeEnabledKey;
-        public const string PrefKeyPort = UTAgentPrefs.BridgePortKey;
-        public const int DefaultPort = UTAgentPrefs.DefaultBridgePort;
+        public const int DefaultPort = UTAgentConfig.DefaultBridgePort;
         public const int MaxLogLines = 500;
 
         private static readonly Queue<BridgeWorkItem> mQueue = new Queue<BridgeWorkItem>();

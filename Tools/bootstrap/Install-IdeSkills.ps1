@@ -1,34 +1,38 @@
-# 将 Assets/UTAgent/ide-skills/* 复制到工作区 .cursor/skills/（Cursor）
+# 将 Assets/UTAgent/agent-skills/* 复制到工作区技能目录
+# 默认目标：.cursor/skills/（Cursor）；其它工具请按各自约定改 -DestRel
 # 用法（项目根）：
 #   ./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1
 #   ./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1 -Force
+#   ./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1 -DestRel ".claude/skills"
 
 param(
     [switch]$Force,
-    [string]$WorkspaceRoot = ""
+    [string]$WorkspaceRoot = "",
+    [string]$DestRel = ".cursor/skills"
 )
 
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = $PSScriptRoot
 $UtagentRoot = (Resolve-Path (Join-Path $ScriptDir "../..")).Path
-$IdeSkills = Join-Path $UtagentRoot "ide-skills"
-
-if (-not (Test-Path $IdeSkills)) {
-    Write-Error "ide-skills not found: $IdeSkills"
+$AgentSkills = Join-Path $UtagentRoot "agent-skills"
+if (-not (Test-Path $AgentSkills)) {
+    $AgentSkills = Join-Path $UtagentRoot "ide-skills"
+}
+if (-not (Test-Path $AgentSkills)) {
+    Write-Error "agent-skills (or legacy ide-skills) not found under: $UtagentRoot"
     exit 1
 }
 
-# 工作区根 = 含 Assets/UTAgent 的项目根（UTAgent 的上两级：UTAgent → Assets → 项目根）
 if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) {
     $WorkspaceRoot = (Resolve-Path (Join-Path $UtagentRoot "../..")).Path
 }
 
-$DestRoot = Join-Path $WorkspaceRoot ".cursor/skills"
+$DestRoot = Join-Path $WorkspaceRoot $DestRel
 New-Item -ItemType Directory -Path $DestRoot -Force | Out-Null
 
 $copied = 0
-Get-ChildItem $IdeSkills -Directory | ForEach-Object {
+Get-ChildItem $AgentSkills -Directory | ForEach-Object {
     $name = $_.Name
     $dest = Join-Path $DestRoot $name
     if ((Test-Path $dest) -and -not $Force) {

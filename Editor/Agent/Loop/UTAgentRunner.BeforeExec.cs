@@ -21,7 +21,7 @@ namespace UTAgent.Editor.Agent
         // Canvas 字样
         private static readonly Regex sCanvasOp = new Regex(@"\bCanvas\b", RegexOptions.Compiled);
         // 弱信号：UI 命名前缀（需与 Canvas 或 AddComponent(UI 组件) 共现）
-        private static readonly Regex sUiNamePrefix = new Regex(@"\b(Btn|Txt|Grp|Input)[A-Z]", RegexOptions.Compiled);
+        private static readonly Regex sUiNamePrefix = new Regex(@"\b(Btn|Txt|Panel|Input)[A-Z]", RegexOptions.Compiled);
         // 排查域信号
         private static readonly Regex sDescribeGo = new Regex(@"describe_go", RegexOptions.Compiled);
         // 重型全量反射黑名单：GetComponents(typeof(Component)) / GetComponents(CS.UnityEngine.Component) 及 InParent/InChildren 变体（不拦指定类型如 GetComponents(Image)）

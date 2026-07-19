@@ -21,9 +21,9 @@ def create_layout_panel(feature, title_text):
     wnd_rt.pivot = CS.UnityEngine.Vector2(0.5, 0.5)
     wnd_rt.anchoredPosition = CS.UnityEngine.Vector2(0, 0)
     wnd_rt.sizeDelta = CS.UnityEngine.Vector2(400, 280)
-    grp_body = CS.UnityEngine.GameObject("GrpBody")
-    grp_body.transform.SetParent(wnd.transform, False)
-    vlg = grp_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
+    panel_body = CS.UnityEngine.GameObject("PanelBody")
+    panel_body.transform.SetParent(wnd.transform, False)
+    vlg = panel_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
     vlg.spacing = 16
     vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
     vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
@@ -31,20 +31,20 @@ def create_layout_panel(feature, title_text):
     vlg.childControlHeight = True
     vlg.childForceExpandWidth = True
     vlg.childForceExpandHeight = False
-    body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
+    body_rt = panel_body.GetComponent(CS.UnityEngine.RectTransform)
     body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
     body_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
     title = CS.UnityEngine.GameObject("TxtTitle")
-    title.transform.SetParent(grp_body.transform, False)
+    title.transform.SetParent(panel_body.transform, False)
     title_tmp = title.AddComponent(CS.TMPro.TextMeshProUGUI)
     title_tmp.text = title_text
     title_tmp.fontSize = 28
     title_tmp.color = color_text_primary
     title_tmp.alignment = CS.TMPro.TextAlignmentOptions.Center
     btn = CS.UnityEngine.GameObject("BtnSubmit")
-    btn.transform.SetParent(grp_body.transform, False)
+    btn.transform.SetParent(panel_body.transform, False)
     btn.AddComponent(CS.UnityEngine.UI.Image).color = color_accent
     btn.AddComponent(CS.UnityEngine.UI.Button)
     btn.GetComponent(CS.UnityEngine.RectTransform).sizeDelta = CS.UnityEngine.Vector2(200, 48)

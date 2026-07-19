@@ -14,7 +14,7 @@ Editor 拼/改 Canvas UI、布局、预制体。
 
 ## 命名 v2
 
-`Wnd*` / `Btn*` / `Txt*` / `Grp*` / `Input*` + **英文 PascalCase**（如 `TxtSkillDesc`、`GrpSkillRow1`）。  
+`Wnd*` / `Btn*` / `Txt*` / `Panel*` / `Input*` + **英文 PascalCase**（如 `TxtSkillDesc`、`PanelSkillRow1`）。  
 按钮内文案节点固定名 `TxtLabel`。  
 **禁止** `*Go`、裸 `Button`、`Test*`。  
 **禁止**对象名含 emoji / 特殊符号 / 空格 / 中文——展示文案（含 ✦❄ 等）只写在 `TMP.text`，**不要**写进 `GameObject.name`。  
@@ -131,9 +131,9 @@ def create_layout_panel(feature, title_text):
     wnd_rt.pivot = CS.UnityEngine.Vector2(0.5, 0.5)
     wnd_rt.anchoredPosition = CS.UnityEngine.Vector2(0, 0)
     wnd_rt.sizeDelta = CS.UnityEngine.Vector2(400, 280)
-    grp_body = CS.UnityEngine.GameObject("GrpBody")
-    grp_body.transform.SetParent(wnd.transform, False)
-    vlg = grp_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
+    panel_body = CS.UnityEngine.GameObject("PanelBody")
+    panel_body.transform.SetParent(wnd.transform, False)
+    vlg = panel_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
     vlg.spacing = 16
     vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
     vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
@@ -141,20 +141,20 @@ def create_layout_panel(feature, title_text):
     vlg.childControlHeight = True
     vlg.childForceExpandWidth = True
     vlg.childForceExpandHeight = False
-    body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
+    body_rt = panel_body.GetComponent(CS.UnityEngine.RectTransform)
     body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
     body_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
     title = CS.UnityEngine.GameObject("TxtTitle")
-    title.transform.SetParent(grp_body.transform, False)
+    title.transform.SetParent(panel_body.transform, False)
     title_tmp = title.AddComponent(CS.TMPro.TextMeshProUGUI)
     title_tmp.text = title_text
     title_tmp.fontSize = 28
     title_tmp.color = color_text_primary
     title_tmp.alignment = CS.TMPro.TextAlignmentOptions.Center
     btn = CS.UnityEngine.GameObject("BtnSubmit")
-    btn.transform.SetParent(grp_body.transform, False)
+    btn.transform.SetParent(panel_body.transform, False)
     btn.AddComponent(CS.UnityEngine.UI.Image).color = color_accent
     btn.AddComponent(CS.UnityEngine.UI.Button)
     btn.GetComponent(CS.UnityEngine.RectTransform).sizeDelta = CS.UnityEngine.Vector2(200, 48)
@@ -187,14 +187,14 @@ print(json.dumps(create_layout_panel(feature, title_text), ensure_ascii=False))
 
 ### #3 `create_tmp_input_field`
 
-在已有 `LayoutGroup` 父（默认 `GrpBody`）下创建 `Input{Purpose}`。根挂 `LayoutElement.preferredHeight`（默认 40），**禁止**只靠 `sizeDelta.x=0` 指望获得宽度。内部 Bg/TextArea 用 stretch。先确保父已存在（如先跑 `#2`）。
+在已有 `LayoutGroup` 父（默认 `PanelBody`）下创建 `Input{Purpose}`。根挂 `LayoutElement.preferredHeight`（默认 40），**禁止**只靠 `sizeDelta.x=0` 指望获得宽度。内部 Bg/TextArea 用 stretch。先确保父已存在（如先跑 `#2`）。
 
 ```python
 import json
 import unity
 from unity_bind import CS
 
-def create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="GrpBody", preferred_h=40):
+def create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="PanelBody", preferred_h=40):
     input_name = f"Input{purpose}"
     unity.prepare_scene_object(input_name)
     parent = CS.UnityEngine.GameObject.Find(parent_name)
@@ -262,7 +262,7 @@ def create_tmp_input_field(purpose, placeholder_text, password=False, parent_nam
 purpose = "Account"
 placeholder_text = "账号"
 password = False
-parent_name = "GrpBody"
+parent_name = "PanelBody"
 print(json.dumps(create_tmp_input_field(purpose, placeholder_text, password, parent_name), ensure_ascii=False))
 ```
 
@@ -296,7 +296,7 @@ def add_to_layout(parent_name, child_name, preferred_w=None, preferred_h=None):
         "has_layout_element": child.GetComponent(CS.UnityEngine.UI.LayoutElement) is not None,
     }
 
-parent_name = "GrpBody"
+parent_name = "PanelBody"
 child_name = "TxtTitle"
 print(json.dumps(add_to_layout(parent_name, child_name), ensure_ascii=False))
 ```

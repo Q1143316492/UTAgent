@@ -19,6 +19,8 @@ description: "UT Agent：三层互操作（unity 动词 / 过滤自省 / unity_b
 
 ## UTAgent C# 目录语义（改代码时对照）
 
+桥接原理与文件表见包内文档：`Assets/UTAgent/Docs/python-interop-bridge.md`。
+
 | 目录 | 职责 | 何时改 |
 |------|------|--------|
 | `Editor/Agent/` | LLM Chat、Runner、会话日志 | 改编排 / UI 窗口，**不是** Unity 桥接 |

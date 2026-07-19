@@ -14,8 +14,6 @@ namespace UTAgent.Editor.Agent
     /// </summary>
     public sealed class UTAgentSessionLogger
     {
-        public const string PrefKeyLogDirectory = UTAgentPrefs.AgentLogDirectoryKey;
-
         private const int MaxInlineChars = 4000;
 
         private readonly StreamWriter mWriter;

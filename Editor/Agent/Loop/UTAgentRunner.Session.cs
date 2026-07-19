@@ -179,6 +179,7 @@ namespace UTAgent.Editor.Agent
 
         /// <summary>
         /// 续最近非空会话；没有则进入草稿（不落盘空文件）。
+        /// 仅供显式「恢复」调用；域重载 / configure 后的默认同步不要走这里。
         /// </summary>
         public bool ContinueRecentSession(out string loadJson, out string message)
         {
@@ -208,7 +209,8 @@ namespace UTAgent.Editor.Agent
         }
 
         /// <summary>
-        /// 若 configure 刚清空 history，或内存为空而磁盘有会话，则从磁盘同步。
+        /// 若 configure 刚清空 history，或内存为空而磁盘有当前会话，则从磁盘同步。
+        /// 无打开会话时默认进入新草稿（不自动续上次；用「会话…」手动恢复）。
         /// </summary>
         public bool EnsureSessionHistorySynced(out string loadJson, out string message)
         {
@@ -258,13 +260,15 @@ namespace UTAgent.Editor.Agent
                 return ok;
             }
 
-            bool continued = ContinueRecentSession(out loadJson, out message);
-            if (continued)
+            // 域重载 / 首次打开 Chat：默认新草稿，不自动打开上次对话
+            bool started = NewSession(out message);
+            if (started)
             {
                 mSessionHistoryNeedsReload = false;
+                loadJson = "";
             }
 
-            return continued;
+            return started;
         }
 
         /// <summary>

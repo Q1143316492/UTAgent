@@ -363,7 +363,7 @@ namespace UTAgent.Editor.Agent
 
         private static int GetMinKeepMessagesFromConfig()
         {
-            return UTAgentPrefs.GetAgentMinKeepMessages();
+            return UTAgentConfig.ResolveMinKeepMessages();
         }
 
         private static string BuildMessagesArray(string systemPrompt, string messagesJson)

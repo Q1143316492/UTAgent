@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using UnityEngine;
 using UTAgent.Editor.Config;
-using Debug = UnityEngine.Debug;
 
 namespace UTAgent.Editor.PythonInterop
 {
@@ -37,7 +34,7 @@ namespace UTAgent.Editor.PythonInterop
                 }
                 catch (ReflectionTypeLoadException)
                 {
-                    // ???????????????????
+                    // 部分程序集无法完整枚举类型，跳过
                 }
             }
             var sorted = namespaces.OrderBy(n => n).ToArray();
@@ -45,7 +42,7 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ???? Editor Agent ??????????????? Plastic SCM ??????????
+        /// 列出 Editor Agent 允许的命名空间（含白名单与 Plastic SCM 等前缀）。
         /// </summary>
         public string ListEditorNamespaces()
         {
@@ -87,13 +84,13 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ???????????????????????????????????????????
+        /// 列出给定命名空间中的公开类型。
         /// </summary>
         public string ListTypesInNamespace(string namespaces)
         {
             if (string.IsNullOrWhiteSpace(namespaces))
             {
-                return Error("namespaces ???????");
+                return Error("namespaces 不能为空");
             }
             var nsSet = new HashSet<string>(namespaces.Split(',').Select(n => n.Trim()));
             var types = new List<string>();
@@ -118,13 +115,13 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ?????????????????????????
+        /// 按全限定名获取类型成员详情。
         /// </summary>
         public string GetTypeDetails(string typeNames)
         {
             if (string.IsNullOrWhiteSpace(typeNames))
             {
-                return Error("type_names ???????");
+                return Error("type_names 不能为空");
             }
             var names = typeNames.Split(',').Select(n => n.Trim()).ToArray();
             var typeInfos = new List<string>();
@@ -161,7 +158,7 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ?????? N ?? Unity Console ?????
+        /// 获取最近 N 条 Unity Console 日志。
         /// </summary>
         public string GetRecentLogs(int count, string logType)
         {
@@ -179,17 +176,12 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ??????????????
+        /// 获取日志计数摘要。
         /// </summary>
         public string GetLogSummary()
         {
             var summary = UnityModuleLogCollector.GetSummary();
             return $"{{\"log\":{summary.Log},\"warning\":{summary.Warning},\"error\":{summary.Error},\"total\":{summary.Total}}}";
         }
-
-        /// <summary>
-        /// ??????????????? PNG base64??
-        /// Play Mode ??????? Game ????????????? Scene ??????????????????
-        /// </summary>
     }
 }

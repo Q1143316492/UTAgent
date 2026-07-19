@@ -32,13 +32,5 @@ namespace UTAgent.Editor.Agent
 
             return Configure(apiKey, baseUrl, model, maxSteps);
         }
-
-        /// <summary>
-        /// 兼容旧调用；请改用 <see cref="ConfigureFromConfig"/>。
-        /// </summary>
-        public string ConfigureFromPrefs()
-        {
-            return ConfigureFromConfig();
-        }
     }
 }

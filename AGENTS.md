@@ -7,5 +7,5 @@
 ## 规则
 
 - 禁止创建名为 `ForbiddenPanel` 的 GameObject / UI 根节点（验收示意）。
-- GameObject 命名用英文 PascalCase 前缀（`Wnd*` / `Btn*` / `Txt*` / `Grp*`）；展示文案可中文，**不要**把 emoji 写进对象名。
+- GameObject 命名用英文 PascalCase 前缀（`Wnd*` / `Btn*` / `Txt*` / `Panel*` / `Input*`）；展示文案可中文，**不要**把 emoji 写进对象名。
 - 改文件后需「刷新 Python」或新开一轮 turn 才会重新加载本指令。

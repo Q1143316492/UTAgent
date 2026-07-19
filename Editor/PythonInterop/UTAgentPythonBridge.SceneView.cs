@@ -12,14 +12,14 @@ namespace UTAgent.Editor.PythonInterop
     public sealed partial class UTAgentPythonBridge
     {
         /// <summary>
-        /// ��ȡ Unity Editor Scene ��ͼ������ PNG base64��ʼ�� Scene View���� Game ��ͼ����
+        /// 捕获 Unity Editor Scene 视图，返回 PNG base64（始终 Scene View，非 Game 视图）。
         /// </summary>
         public string CaptureSceneViewScreenshot(int maxWidth, int maxHeight)
         {
             if (maxWidth < MinScreenshotSize || maxWidth > MaxScreenshotWidth ||
                 maxHeight < MinScreenshotSize || maxHeight > MaxScreenshotHeight)
             {
-                return Error($"��ͼ�ߴ������ {MinScreenshotSize}-{MaxScreenshotWidth}x{MaxScreenshotHeight} ֮��");
+                return Error($"截图尺寸须在 {MinScreenshotSize}-{MaxScreenshotWidth}x{MaxScreenshotHeight} 之间");
             }
 
             try
@@ -27,7 +27,7 @@ namespace UTAgent.Editor.PythonInterop
                 var tex = CaptureSceneView(maxWidth, maxHeight);
                 if (tex == null)
                 {
-                    return Error("Scene ��ͼ��ͼʧ�ܣ��޷���ȡ� Scene ��ͼͼ��");
+                    return Error("Scene 视图截图失败：无法获取活动 Scene 视图相机");
                 }
 
                 try
@@ -35,7 +35,7 @@ namespace UTAgent.Editor.PythonInterop
                     var bytes = tex.EncodeToPNG();
                     if (bytes == null || bytes.Length == 0)
                     {
-                        return Error("��ͼ����ʧ��");
+                        return Error("截图编码失败");
                     }
                     return BuildImageResponse(bytes, "scene");
                 }
@@ -46,20 +46,20 @@ namespace UTAgent.Editor.PythonInterop
             }
             catch (Exception e)
             {
-                return Error($"Scene ��ͼ��ͼʧ�ܣ�{e.Message}");
+                return Error($"Scene 视图截图失败：{e.Message}");
             }
         }
 
         /// <summary>
-        /// ��ȡ��ǰ��ͼ������ PNG base64��
-        /// Play Mode ����ʹ�� Game ��ͼ��������˵� Scene ��ͼ��֧�ִ��༭����֤��
+        /// 捕获当前视图，返回 PNG base64。
+        /// Play Mode 优先使用 Game 视图；失败则回退 Scene 视图（支持纯编辑器验证）。
         /// </summary>
         public string CaptureScreenshot(int maxWidth, int maxHeight)
         {
             if (maxWidth < MinScreenshotSize || maxWidth > MaxScreenshotWidth ||
                 maxHeight < MinScreenshotSize || maxHeight > MaxScreenshotHeight)
             {
-                return Error($"��ͼ�ߴ������ {MinScreenshotSize}-{MaxScreenshotWidth}x{MaxScreenshotHeight} ֮��");
+                return Error($"截图尺寸须在 {MinScreenshotSize}-{MaxScreenshotWidth}x{MaxScreenshotHeight} 之间");
             }
 
             try
@@ -75,7 +75,7 @@ namespace UTAgent.Editor.PythonInterop
                     }
                     catch (Exception e)
                     {
-                        Debug.LogWarning($"[UTAgent] Game ��ͼ��ͼʧ�ܣ������˵� Scene ��ͼ��{e.Message}");
+                        Debug.LogWarning($"[UTAgent] Game 视图截图失败，回退到 Scene 视图：{e.Message}");
                     }
                 }
 
@@ -87,7 +87,7 @@ namespace UTAgent.Editor.PythonInterop
 
                 if (tex == null)
                 {
-                    return Error("��ͼʧ�ܣ��޷���ȡ Game �� Scene ��ͼͼ��");
+                    return Error("截图失败：无法获取 Game 或 Scene 视图图像");
                 }
 
                 try
@@ -95,7 +95,7 @@ namespace UTAgent.Editor.PythonInterop
                     var bytes = tex.EncodeToPNG();
                     if (bytes == null || bytes.Length == 0)
                     {
-                        return Error("��ͼ����ʧ��");
+                        return Error("截图编码失败");
                     }
                     return BuildImageResponse(bytes, source);
                 }
@@ -106,12 +106,12 @@ namespace UTAgent.Editor.PythonInterop
             }
             catch (Exception e)
             {
-                return Error($"��ͼʧ�ܣ�{e.Message}");
+                return Error($"截图失败：{e.Message}");
             }
         }
 
         /// <summary>
-        /// ͨ��������Ⱦ��ǰ Scene ��ͼ��������� Texture2D������ Play Mode Ҳ��ʹ�á�
+        /// 通过离屏渲染当前 Scene 视图相机，返回 Texture2D（即使 Play Mode 也可用）。
         /// </summary>
         private static Texture2D CaptureSceneView(int maxWidth, int maxHeight)
         {
@@ -123,21 +123,21 @@ namespace UTAgent.Editor.PythonInterop
                 var sceneView = lastActiveProperty?.GetValue(null);
                 if (sceneView == null)
                 {
-                    Debug.LogWarning("[UTAgent] �Ҳ���� Scene ��ͼ");
+                    Debug.LogWarning("[UTAgent] 找不到活动 Scene 视图");
                     return null;
                 }
 
                 var cameraProperty = sceneViewType.GetProperty("camera", BindingFlags.Instance | BindingFlags.Public);
                 if (cameraProperty == null)
                 {
-                    Debug.LogWarning("[UTAgent] SceneView û�� camera ����");
+                    Debug.LogWarning("[UTAgent] SceneView 没有 camera 属性");
                     return null;
                 }
 
                 var camera = cameraProperty.GetValue(sceneView) as Camera;
                 if (camera == null)
                 {
-                    Debug.LogWarning("[UTAgent] SceneView camera Ϊ��");
+                    Debug.LogWarning("[UTAgent] SceneView camera 为空");
                     return null;
                 }
 
@@ -168,7 +168,7 @@ namespace UTAgent.Editor.PythonInterop
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[UTAgent] Scene ��ͼ��ͼʧ�ܣ�{e.Message}");
+                Debug.LogWarning($"[UTAgent] Scene 视图截图失败：{e.Message}");
                 return null;
             }
         }
@@ -179,8 +179,8 @@ namespace UTAgent.Editor.PythonInterop
             return $"{{\"success\":true,\"message\":\"screenshot captured from {source}\",\"__image\":{{\"base64\":{BridgeJson.EscapeJson(base64)},\"mediaType\":\"image/png\"}}}}";
         }
 
-        // ----- Scene View �ٿض��ʣ����䣬���� puerts ScreenCaptureBridge��-----
-        // Runtime asmdef ����ֱ������ UnityEditor������ȫ���߷��䡣
+        // ----- Scene View 相机动词（反射，对标 puerts ScreenCaptureBridge）-----
+        // Runtime asmdef 不能直接引用 UnityEditor，故全程反射。
 
         private static object GetSceneView()
         {
@@ -419,10 +419,10 @@ namespace UTAgent.Editor.PythonInterop
                 var activeGOProp = selectionType?.GetProperty("activeGameObject", BindingFlags.Static | BindingFlags.Public);
                 activeGOProp?.SetValue(null, go);
 
-                // FrameSelected �� Unity �汾��ǩ����ͬ��
-                //   2022+: static void FrameSelected() �� static void FrameSelected(bool)
+                // FrameSelected 在 Unity 版本间签名不同：
+                //   2022+: static void FrameSelected() 或 static void FrameSelected(bool)
                 //   2021-: instance void FrameSelected(bool)
-                // ȫ�������������޲� static �档
+                // 全部尝试，优先无参 static 版。
                 var svTypeCur = sv.GetType();
                 var frameMethod = svTypeCur.GetMethod("FrameSelected", BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public, null,
                     Type.EmptyTypes, null);

@@ -21,6 +21,10 @@ namespace UTAgent.Editor.Config
         public const int DefaultDeepSeekContextWindow = 1000000;
         public const int DefaultGenericContextWindow = 200000;
         public const int DefaultCompactionInputPercent = 75;
+        /// <summary>
+        /// compaction 保留最近消息数（内部常量，不进 JSON；调参改代码即可）。
+        /// </summary>
+        public const int DefaultMinKeepMessages = 20;
         public const int MinInputTokenBudget = 8000;
 
         private static UTAgentConfigDto mCurrent;
@@ -362,6 +366,14 @@ namespace UTAgent.Editor.Config
             }
 
             return (int)budget;
+        }
+
+        /// <summary>
+        /// compaction 保留最近消息数；不暴露到 JSON。
+        /// </summary>
+        public static int ResolveMinKeepMessages()
+        {
+            return DefaultMinKeepMessages;
         }
 
         public static ModelDto FindModel(string providerId, string modelId)

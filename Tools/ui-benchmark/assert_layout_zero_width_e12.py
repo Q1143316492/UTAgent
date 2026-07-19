@@ -24,9 +24,9 @@ def _create_layout_panel(feature, title_text):
     wnd_rt.pivot = CS.UnityEngine.Vector2(0.5, 0.5)
     wnd_rt.anchoredPosition = CS.UnityEngine.Vector2(0, 0)
     wnd_rt.sizeDelta = CS.UnityEngine.Vector2(400, 280)
-    grp_body = CS.UnityEngine.GameObject("GrpBody")
-    grp_body.transform.SetParent(wnd.transform, False)
-    vlg = grp_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
+    panel_body = CS.UnityEngine.GameObject("PanelBody")
+    panel_body.transform.SetParent(wnd.transform, False)
+    vlg = panel_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
     vlg.spacing = 16
     vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
     vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
@@ -34,20 +34,20 @@ def _create_layout_panel(feature, title_text):
     vlg.childControlHeight = True
     vlg.childForceExpandWidth = True
     vlg.childForceExpandHeight = False
-    body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
+    body_rt = panel_body.GetComponent(CS.UnityEngine.RectTransform)
     body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
     body_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
     title = CS.UnityEngine.GameObject("TxtTitle")
-    title.transform.SetParent(grp_body.transform, False)
+    title.transform.SetParent(panel_body.transform, False)
     title_tmp = title.AddComponent(CS.TMPro.TextMeshProUGUI)
     title_tmp.text = title_text
     title_tmp.fontSize = 28
     title_tmp.color = color_text_primary
     title_tmp.alignment = CS.TMPro.TextAlignmentOptions.Center
     btn = CS.UnityEngine.GameObject("BtnSubmit")
-    btn.transform.SetParent(grp_body.transform, False)
+    btn.transform.SetParent(panel_body.transform, False)
     btn.AddComponent(CS.UnityEngine.UI.Image).color = color_accent
     btn.AddComponent(CS.UnityEngine.UI.Button)
     btn_le = btn.AddComponent(CS.UnityEngine.UI.LayoutElement)
@@ -68,7 +68,7 @@ def _create_layout_panel(feature, title_text):
     return root_name
 
 
-def _create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="GrpBody", preferred_h=40):
+def _create_tmp_input_field(purpose, placeholder_text, password=False, parent_name="PanelBody", preferred_h=40):
     input_name = f"Input{purpose}"
     unity.prepare_scene_object(input_name)
     parent = CS.UnityEngine.GameObject.Find(parent_name)
@@ -151,7 +151,7 @@ def _scan_zero(root_name):
 
 
 root = _create_layout_panel("E12", "E12 Panel")
-_create_tmp_input_field("Account", "账号", parent_name="GrpBody")
+_create_tmp_input_field("Account", "账号", parent_name="PanelBody")
 CS.UnityEngine.Canvas.ForceUpdateCanvases()
 violations = _scan_zero(root)
 print(json.dumps({

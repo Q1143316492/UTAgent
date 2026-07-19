@@ -1,17 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using UnityEngine;
-using Debug = UnityEngine.Debug;
 
 namespace UTAgent.Editor.PythonInterop
 {
     /// <summary>
-    /// `unity` Python ģ��� C# Bridge�������ػ���䡢Unity API�����л����������
-    /// Python ��ֻ��������㡣����ֵͳһΪ JSON �ַ�����
+    /// `unity` Python 模块的 C# Bridge：耗时/需宿主（场景、Unity API、序列化）放在这里，
+    /// Python 侧只做薄封装。返回值统一为 JSON 字符串。
     /// </summary>
     public sealed partial class UTAgentPythonBridge
     {
@@ -26,7 +22,7 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ������浽 Unity Console��
+        /// 写警告到 Unity Console。
         /// </summary>
         public void LogWarning(string message)
         {
@@ -34,13 +30,12 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// ������� Unity Console��
+        /// 写错误到 Unity Console。
         /// </summary>
         public void LogError(string message)
         {
             Debug.LogError($"[UTAgent] {message}");
         }
-
 
         private static string BuildHierarchyNode(Transform transform, int maxDepth, int currentDepth)
         {

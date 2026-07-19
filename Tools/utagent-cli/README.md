@@ -1,6 +1,6 @@
 # UTAgent CLI
 
-通过 localhost HTTP 调用运行中的 Unity Editor（UTAgent Remote CLI），供 Cursor 终端自主验证 Unity 改动。
+通过 localhost HTTP 调用运行中的 Unity Editor（UTAgent Remote CLI）。主能力是 **`exec`：在 Editor 内跑 Python** 操控场景/UI；Cursor 用多次 `exec` 编排。
 
 CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent-cli/`。拷贝整个 `Assets/UTAgent` 到其他 Unity 项目即可使用。
 
@@ -68,6 +68,6 @@ CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent
 
 ## Cursor Skill
 
-将 `Assets/UTAgent/ide-skills/utagent-unity-verify/` 复制到目标项目 `.cursor/skills/`。
+将 `Assets/UTAgent/agent-skills/utagent-unity-exec/` 复制到当前编码助手的 skills 目录（例如 Cursor：`.cursor/skills/`）。
 
 详见 `Docs/ut-agent/14-utagent-cli.md`。

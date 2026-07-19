@@ -1,7 +1,7 @@
 """golden-path benchmark：用原语拼 WndSettings 设置面板。
 
-流程：create_layout_panel 建 WndSettings+GrpBody(VLG) → raw CS.* 建 Row*{TxtLabel+控件}
-→ add_to_layout 挂 Row* 到 GrpBody → add_to_layout 挂 GrpButtons{BtnSave,BtnCancel}。
+流程：create_layout_panel 建 WndSettings+PanelBody(VLG) → raw CS.* 建 Row*{TxtLabel+控件}
+→ add_to_layout 挂 Row* 到 PanelBody → add_to_layout 挂 PanelButtons{BtnSave,BtnCancel}。
 幂等：重复 exec 两次 find_objects("WndSettings")["count"] == 1。
 """
 import json
@@ -54,7 +54,7 @@ def add_to_layout(parent_name, child_name, preferred_w=None, preferred_h=None):
 
 
 def create_layout_panel(feature, title_text):
-    """建 Wnd{feature} + GrpBody(VLG) + TxtTitle + GrpButtons 容器（不含按钮内容）。"""
+    """建 Wnd{feature} + PanelBody(VLG) + TxtTitle + PanelButtons 容器（不含按钮内容）。"""
     root_name = f"Wnd{feature}"
     color_surface = CS.UnityEngine.Color(0.15, 0.15, 0.18, 0.98)
     color_text_primary = CS.UnityEngine.Color(0.95, 0.95, 0.95, 1)
@@ -71,19 +71,19 @@ def create_layout_panel(feature, title_text):
     wnd_rt.pivot = CS.UnityEngine.Vector2(0.5, 0.5)
     wnd_rt.anchoredPosition = CS.UnityEngine.Vector2(0, 0)
     wnd_rt.sizeDelta = CS.UnityEngine.Vector2(420, 360)
-    grp_body = CS.UnityEngine.GameObject("GrpBody")
-    grp_body.transform.SetParent(wnd.transform, False)
-    vlg = grp_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
+    panel_body = CS.UnityEngine.GameObject("PanelBody")
+    panel_body.transform.SetParent(wnd.transform, False)
+    vlg = panel_body.AddComponent(CS.UnityEngine.UI.VerticalLayoutGroup)
     vlg.spacing = 16
     vlg.padding = CS.UnityEngine.RectOffset(24, 24, 24, 24)
     vlg.childAlignment = CS.UnityEngine.TextAnchor.UpperCenter
-    body_rt = grp_body.GetComponent(CS.UnityEngine.RectTransform)
+    body_rt = panel_body.GetComponent(CS.UnityEngine.RectTransform)
     body_rt.anchorMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.anchorMax = CS.UnityEngine.Vector2(1, 1)
     body_rt.offsetMin = CS.UnityEngine.Vector2(0, 0)
     body_rt.offsetMax = CS.UnityEngine.Vector2(0, 0)
     title = CS.UnityEngine.GameObject("TxtTitle")
-    title.transform.SetParent(grp_body.transform, False)
+    title.transform.SetParent(panel_body.transform, False)
     title_tmp = title.AddComponent(CS.TMPro.TextMeshProUGUI)
     title_tmp.text = title_text
     title_tmp.fontSize = 28
@@ -97,7 +97,7 @@ def build_settings_form():
     title_text = "设置"
     root_name, vlg = create_layout_panel(feature, title_text)
 
-    # 建 2 行（音乐/音效）并挂到 GrpBody
+    # 建 2 行（音乐/音效）并挂到 PanelBody
     rows = [
         ("RowMusic", "音乐", "Toggle"),
         ("RowSfx", "音效", "Slider"),
@@ -105,13 +105,13 @@ def build_settings_form():
     row_count = 0
     for row_name, label, control in rows:
         _make_row(row_name, label, control)
-        add_to_layout("GrpBody", row_name, preferred_h=40)
+        add_to_layout("PanelBody", row_name, preferred_h=40)
         row_count += 1
 
-    # 建按钮行容器 + 2 按钮，挂到 GrpBody
-    grp_buttons = CS.UnityEngine.GameObject("GrpButtons")
-    grp_buttons.AddComponent(CS.UnityEngine.UI.HorizontalLayoutGroup).spacing = 12
-    add_to_layout("GrpBody", "GrpButtons", preferred_h=48)
+    # 建按钮行容器 + 2 按钮，挂到 PanelBody
+    panel_buttons = CS.UnityEngine.GameObject("PanelButtons")
+    panel_buttons.AddComponent(CS.UnityEngine.UI.HorizontalLayoutGroup).spacing = 12
+    add_to_layout("PanelBody", "PanelButtons", preferred_h=48)
     button_count = 0
     for btn_name, btn_label in [("BtnSave", "保存"), ("BtnCancel", "取消")]:
         btn = CS.UnityEngine.GameObject(btn_name)
@@ -130,7 +130,7 @@ def build_settings_form():
         lbl_tmp.fontSize = 18
         lbl_tmp.color = CS.UnityEngine.Color(1, 1, 1, 1)
         lbl_tmp.alignment = CS.TMPro.TextAlignmentOptions.Center
-        add_to_layout("GrpButtons", btn_name)
+        add_to_layout("PanelButtons", btn_name)
         button_count += 1
 
     save_result = unity.save_scene()
