@@ -275,6 +275,7 @@ namespace UTAgent.Editor.Config
                 }
             }
 
+            // 已可用时 forceReload：Shutdown→冷启动；不可用时走 Initialize（同 dll 可附着，无需无意义 Shutdown）
             bool forceReload = UTAgentBootstrap.IsAvailable;
             UTAgentReadiness.Status status = UTAgentReadiness.ApplyPythonConfigAndInit(
                 forceReload: forceReload);

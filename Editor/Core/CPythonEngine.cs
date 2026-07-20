@@ -34,39 +34,65 @@ namespace UTAgent.Editor.Core
 
         /// <summary>
         /// 初始化 CPython 引擎。重复调用安全。
+        /// 若 pythonnet 已初始化且 dll 未变：附着（不写 Runtime.PythonDLL）并重注册桥。
         /// </summary>
         public void Initialize()
         {
             lock (mLock)
             {
-                if (IsAvailable)
+                InitializeLocked();
+            }
+        }
+
+        private void InitializeLocked()
+        {
+            if (IsAvailable)
+            {
+                Debug.Log("[UTAgent] 引擎已初始化，跳过");
+                return;
+            }
+
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                string pythonHome = ResolvePythonHomeOrThrow();
+                string targetDll = Path.Combine(pythonHome, PythonHomeResolver.ResolvePythonDllFileName());
+
+                if (PythonEngine.IsInitialized)
                 {
-                    Debug.Log("[UTAgent] 引擎已初始化，跳过");
-                    return;
+                    string currentDll = Runtime.PythonDLL ?? string.Empty;
+                    if (DllPathsEqual(currentDll, targetDll) || string.IsNullOrWhiteSpace(currentDll))
+                    {
+                        AttachToRunningRuntime(pythonHome);
+                        if (!TryProbeLocked())
+                        {
+                            Debug.LogWarning("[UTAgent] 附着后探活失败，尝试 Shutdown 后冷启动");
+                            ShutdownLocked();
+                            ColdStart(pythonHome, targetDll);
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log($"[UTAgent] dll 变更，Shutdown 后冷启动：{currentDll} → {targetDll}");
+                        ShutdownLocked();
+                        ColdStart(pythonHome, targetDll);
+                    }
+                }
+                else
+                {
+                    ColdStart(pythonHome, targetDll);
                 }
 
-                var sw = Stopwatch.StartNew();
-                try
-                {
-                    ConfigureEnvironment();
-                    if (!PythonEngine.IsInitialized)
-                    {
-                        PythonEngine.Initialize();
-                    }
-                    RegisterBridgeModule();
-                    mInitialized = true;
-                    mInvalidated = false;
-                    sw.Stop();
-                    Debug.Log($"[UTAgent] 初始化完成，耗时 {sw.ElapsedMilliseconds} ms");
-                }
-                catch (Exception e)
-                {
-                    mInitialized = false;
-                    mInvalidated = false;
-                    sw.Stop();
-                    Debug.LogError($"[UTAgent] 初始化失败（{sw.ElapsedMilliseconds} ms）：{e}");
-                    throw;
-                }
+                sw.Stop();
+                Debug.Log($"[UTAgent] 初始化完成，耗时 {sw.ElapsedMilliseconds} ms");
+            }
+            catch (Exception e)
+            {
+                mInitialized = false;
+                mInvalidated = false;
+                sw.Stop();
+                Debug.LogError($"[UTAgent] 初始化失败（{sw.ElapsedMilliseconds} ms）：{e}");
+                throw;
             }
         }
 
@@ -77,26 +103,32 @@ namespace UTAgent.Editor.Core
         {
             lock (mLock)
             {
-                if (!mInitialized)
+                ShutdownLocked();
+            }
+        }
+
+        private void ShutdownLocked()
+        {
+            if (!mInitialized && !PythonEngine.IsInitialized)
+            {
+                return;
+            }
+
+            try
+            {
+                if (PythonEngine.IsInitialized)
                 {
-                    return;
+                    PythonEngine.Shutdown();
                 }
-                try
-                {
-                    if (!mInvalidated && PythonEngine.IsInitialized)
-                    {
-                        PythonEngine.Shutdown();
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[UTAgent] 关闭时异常：{e.Message}");
-                }
-                finally
-                {
-                    mInitialized = false;
-                    mInvalidated = false;
-                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[UTAgent] 关闭时异常：{e.Message}");
+            }
+            finally
+            {
+                mInitialized = false;
+                mInvalidated = false;
             }
         }
 
@@ -190,7 +222,55 @@ namespace UTAgent.Editor.Core
             }
         }
 
-        private static void ConfigureEnvironment()
+        private void AttachToRunningRuntime(string pythonHome)
+        {
+            ApplyEnvironmentVariables(pythonHome);
+            Debug.Log($"[UTAgent] 附着已运行 Runtime（跳过 PythonDLL 赋值），PYTHONHOME={pythonHome}");
+            Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
+            RegisterBridgeModule();
+            mInitialized = true;
+            mInvalidated = false;
+        }
+
+        private void ColdStart(string pythonHome, string targetDll)
+        {
+            ApplyEnvironmentVariables(pythonHome);
+            EnsurePythonDll(targetDll);
+            if (!PythonEngine.IsInitialized)
+            {
+                PythonEngine.Initialize();
+            }
+
+            RegisterBridgeModule();
+            mInitialized = true;
+            mInvalidated = false;
+        }
+
+        /// <summary>
+        /// 附着后探活；失败返回 false（调用方决定 Shutdown→冷启动）。
+        /// </summary>
+        private bool TryProbeLocked()
+        {
+            try
+            {
+                using (Py.GIL())
+                {
+                    using var scope = Py.CreateScope();
+                    scope.Exec("1+1", scope.Variables());
+                }
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[UTAgent] 探活失败：{e.Message}");
+                mInitialized = false;
+                mInvalidated = false;
+                return false;
+            }
+        }
+
+        private static string ResolvePythonHomeOrThrow()
         {
             string pythonHome = PythonHomeResolver.ResolvePythonHome();
             if (string.IsNullOrEmpty(pythonHome))
@@ -200,6 +280,11 @@ namespace UTAgent.Editor.Core
                     "请运行 Tools/bootstrap/Install-PythonHome.ps1，或在 Settings → ① Python 点初始化（见 Docs/skills/utagent-env-bootstrap）。");
             }
 
+            return pythonHome;
+        }
+
+        private static void ApplyEnvironmentVariables(string pythonHome)
+        {
             Environment.SetEnvironmentVariable("PYTHONHOME", pythonHome);
 
             var libPath = Path.Combine(pythonHome, "Lib");
@@ -215,12 +300,57 @@ namespace UTAgent.Editor.Core
                 }
             }
             Environment.SetEnvironmentVariable("PYTHONPATH", string.Join(";", parts));
-
-            string dllName = PythonHomeResolver.ResolvePythonDllFileName();
-            Runtime.PythonDLL = Path.Combine(pythonHome, dllName);
             Debug.Log($"[UTAgent] PYTHONHOME={pythonHome}");
             Debug.Log($"[UTAgent] PYTHONPATH={Environment.GetEnvironmentVariable("PYTHONPATH")}");
-            Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
+        }
+
+        /// <summary>
+        /// 仅在 Runtime 未初始化时赋值 PythonDLL；已初始化时禁止写入（pythonnet 会抛错）。
+        /// </summary>
+        private static void EnsurePythonDll(string targetDll)
+        {
+            if (PythonEngine.IsInitialized)
+            {
+                Debug.Log($"[UTAgent] Runtime 已初始化，跳过 PythonDLL 赋值（当前={Runtime.PythonDLL}）");
+                return;
+            }
+
+            try
+            {
+                Runtime.PythonDLL = targetDll;
+                Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
+            }
+            catch (InvalidOperationException e)
+            {
+                throw new InvalidOperationException(
+                    "[UTAgent] 无法设置 Runtime.PythonDLL（Runtime 已锁定）。请重启 Unity Editor 后再初始化。",
+                    e);
+            }
+        }
+
+        private static bool DllPathsEqual(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(a) && string.IsNullOrWhiteSpace(b))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+            {
+                return false;
+            }
+
+            try
+            {
+                return string.Equals(
+                    Path.GetFullPath(a.Trim()),
+                    Path.GetFullPath(b.Trim()),
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+            }
         }
 
         private static void RegisterBridgeModule()

@@ -1,0 +1,1 @@
+﻿{"ok":false,"zero_size_count":1,"missing_preferred_count":1,"zero_size":[{"name":"BtnBad","w":0.0,"h":0.0,"wnd":"WndRemediationProbe","parent":"PanelBody"}],"missing_preferred":[{"name":"BtnBad","parent":"PanelBody","child_control_w":true,"child_control_h":true,"preferred_w":-1.0,"preferred_h":-1.0,"layout":"HLG"}],"integrity":[]}

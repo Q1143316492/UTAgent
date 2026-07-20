@@ -1,11 +1,33 @@
 # 场景 UI 健康扫描：Canvas 外、零/近零尺寸、直挂、非 ASCII 名、Layout 下缺 preferred。
 # 用法：utagent exec --file assert_ui_scene_health.py
-# 可选：UTAGENT_HEALTH_ROOTS=WndCharacter 只扫该根
+# 可选根过滤（优先顺序）：请求文件 → UTAGENT_HEALTH_ROOTS → 全场景
+# 请求文件：Assets/UTAgent/Tools/ui-benchmark/.tmp/_health_roots.txt（逗号或换行分隔）
 # 只查 GameObject.name，不查 TMP 文案。
+# 注意：CLI 进程里设的环境变量进不了 Unity 内 Python，故 harness 必须写请求文件。
 import json
 import os
 import unity
 from unity_bind import CS
+
+REQUEST_FILE = "Assets/UTAgent/Tools/ui-benchmark/.tmp/_health_roots.txt"
+
+
+def _resolve_roots():
+    if os.path.isfile(REQUEST_FILE):
+        with open(REQUEST_FILE, "r", encoding="utf-8-sig") as f:
+            raw = f.read().strip()
+        if raw:
+            parts = []
+            for chunk in raw.replace(",", " ").split():
+                p = chunk.strip()
+                if p:
+                    parts.append(p)
+            if parts:
+                return parts
+    env = os.environ.get("UTAGENT_HEALTH_ROOTS", "").strip()
+    if env:
+        return [r.strip() for r in env.split(",") if r.strip()]
+    return None
 
 UI_PREFIXES = ("Wnd", "Panel", "Btn", "Txt", "Input", "Row", "Toggle", "Slider")
 # 含 Txt：角色面板 TxtValue/TxtName 曾出现 rect≈0.01
@@ -187,17 +209,15 @@ def scan(roots_filter=None):
 
 def main():
     CS.UnityEngine.Canvas.ForceUpdateCanvases()
-    roots_env = os.environ.get("UTAGENT_HEALTH_ROOTS", "").strip()
-    roots = [r.strip() for r in roots_env.split(",") if r.strip()] if roots_env else None
+    roots = _resolve_roots()
     unity.log("[assert_ui_scene_health] scanning…")
     result = scan(roots)
     # 已知面板根：尺寸门禁之外还要子树完整性，避免空壳 health 假绿
     if roots:
-        import os as _os
         import sys as _sys
-        _bench = _os.path.join("Assets", "UTAgent", "Tools", "ui-benchmark")
-        for p in (_os.path.abspath(_bench), _os.path.abspath(".")):
-            if _os.path.isdir(p) and p not in _sys.path:
+        _bench = os.path.join("Assets", "UTAgent", "Tools", "ui-benchmark")
+        for p in (os.path.abspath(_bench), os.path.abspath(".")):
+            if os.path.isdir(p) and p not in _sys.path:
                 _sys.path.insert(0, p)
         import ui_panel_scope as scope  # noqa: E402
         integ_results = []
@@ -215,6 +235,11 @@ def main():
             result["integrity_ok"] = integ_ok
             if not integ_ok:
                 result["ok"] = False
+        if os.path.isfile(REQUEST_FILE):
+            try:
+                os.remove(REQUEST_FILE)
+            except OSError:
+                pass
     print(json.dumps(result, ensure_ascii=False))
 
 

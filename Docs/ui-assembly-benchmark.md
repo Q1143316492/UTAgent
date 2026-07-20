@@ -10,22 +10,22 @@
 | 档 | 命令 | 内容 |
 |----|------|------|
 | **日常 L1** | `./run_benchmark.ps1` | 门禁冒烟：**E16+E17**（无面板 golden） |
-| **日常 L2** | `./run_benchmark.ps1 -L2Only` | **C02+C14+C15**（chat 拼设置/登录/角色；health 后 export） |
+| **日常 L2** | `./run_benchmark.ps1 -L2Only` | **C02+C14+C15**（chat → health；FAIL 则打回 AI 再扫 → export） |
 | **日常合计** | `./run_benchmark.ps1 -L2` | 上述 L1 + L2 |
 | **按需** | `-Cases …` | 显式 ID（如钩子 C11） |
 
 **正式拼 UI = L2 chat。** 预写整页 golden（E08/E14/E15）已归档，禁止加回日常。  
-**审阅预制体：** `Assets/UTAgent/TestFixtures/UIPanels/`（WndSettings / WndLogin / WndCharacter）；由 **L2** health PASS 后 export（非 L1 golden）。
+**审阅预制体：** `Assets/UTAgent/TestFixtures/UIPanels/`（WndSettings / WndLogin / WndCharacter）；由 L2 **最终** health PASS 后 export（非 L1 golden）。
 
 **加测：** 整页拼 UI 只加 L2；门禁/钩子可加 L1。临时验证放 `opt-in/`，测通且不再需要 → **删脚本**，本表标 **已删**。
 
-**门禁：** `assert_ui_scene_health`（近零 rect；Layout 下须 childControl + preferred）。  
+**门禁：** `assert_ui_scene_health`（近零 rect；Layout 下须 childControl + preferred）。health FAIL 时 harness **打回 Agent 限次纠偏**（见 `format_health_remediation_prompt.py` / `-RemediationMax`），不得停在「无 export」。  
 **Fixtures：** `Assets/UTAgent/TestFixtures/UIPanels/`；导出请求在 `.tmp/`。
 
 ## 验收三层
 
 ```
-L0 契约 → L1 门禁/钩子（无 LLM，非整页答案）→ L2 chat（正式拼 UI）
+L0 契约 → L1 门禁/钩子 → L2 chat → health →（FAIL→打回AI）→ export
 ```
 
 ---

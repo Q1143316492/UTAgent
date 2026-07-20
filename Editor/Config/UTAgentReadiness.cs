@@ -16,8 +16,17 @@ namespace UTAgent.Editor.Config
         private static string sAppliedHome = "";
         private static string sAppliedDll = "";
 
+        /// <summary>
+        /// Runtime.PythonDLL 已锁定、同进程无法恢复时的提示（脚本编译无效）。
+        /// </summary>
+        public const string RestartEditorHint =
+            "请重启 Unity Editor 后再初始化（脚本编译无法解除 Runtime.PythonDLL 锁定）。";
+
+        /// <summary>
+        /// 其他初始化失败时的通用兜底（不再暗示「仅编译脚本即可」）。
+        /// </summary>
         public const string DomainReloadHint =
-            "配置已保存；请触发一次脚本编译（域重载）或重启 Unity Editor 后再初始化。";
+            "若仍失败，请重启 Unity Editor 后再初始化。";
 
         public readonly struct Status
         {
@@ -99,7 +108,7 @@ namespace UTAgent.Editor.Config
                 }
                 catch (Exception e)
                 {
-                    return new Status(false, "Python 初始化失败", e.Message);
+                    return new Status(false, "Python 初始化失败", FormatInitFailureDetail(e));
                 }
             }
 
@@ -132,7 +141,8 @@ namespace UTAgent.Editor.Config
 
         /// <summary>
         /// 按包内 PythonHome + 默认 dll 应用并初始化。
-        /// forceReload 或相对上次生效值有变更时：先 Shutdown 再 Initialize。
+        /// 引擎仍可用且 forceReload / 配置变更时：先 Shutdown 再 Initialize；
+        /// 引擎不可用时直接 Initialize（同 dll 可由引擎层附着已运行 Runtime）。
         /// </summary>
         public static Status ApplyPythonConfigAndInit(bool forceReload)
         {
@@ -167,8 +177,10 @@ namespace UTAgent.Editor.Config
                 return new Status(true, "引擎已在运行", "");
             }
 
+            // 同 dll 且引擎已不可用：直接 Initialize（引擎层会附着已运行 Runtime，不强制 Shutdown）
+            // 仅在引擎仍可用且需要 forceReload / 配置变更时才 Shutdown
             bool didShutdown = false;
-            if (UTAgentBootstrap.IsAvailable)
+            if (UTAgentBootstrap.IsAvailable && needReload)
             {
                 try
                 {
@@ -180,7 +192,7 @@ namespace UTAgent.Editor.Config
                     return new Status(
                         false,
                         "重置引擎失败",
-                        e.Message + "\n" + DomainReloadHint);
+                        FormatInitFailureDetail(e));
                 }
             }
 
@@ -202,8 +214,38 @@ namespace UTAgent.Editor.Config
                 return new Status(
                     false,
                     "初始化失败",
-                    e.Message + "\n" + DomainReloadHint);
+                    FormatInitFailureDetail(e));
             }
+        }
+
+        /// <summary>
+        /// 按异常类型拼用户可读详情；PythonDLL 锁死类明确要求重启 Editor。
+        /// </summary>
+        public static string FormatInitFailureDetail(Exception e)
+        {
+            string message = e?.Message ?? "未知错误";
+            if (IsPythonDllLockFailure(e))
+            {
+                return message + "\n" + RestartEditorHint;
+            }
+
+            return message + "\n" + DomainReloadHint;
+        }
+
+        private static bool IsPythonDllLockFailure(Exception e)
+        {
+            for (Exception cur = e; cur != null; cur = cur.InnerException)
+            {
+                string msg = cur.Message ?? "";
+                if (msg.IndexOf("PythonDLL", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("must be set before runtime is initialized", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("Runtime 已锁定", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

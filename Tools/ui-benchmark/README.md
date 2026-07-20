@@ -7,14 +7,23 @@
 | 档 | 命令 | 内容 |
 |----|------|------|
 | **日常 L1** | `./run_benchmark.ps1` | 门禁冒烟：**E16+E17**（非整页答案） |
-| **日常 L2** | `./run_benchmark.ps1 -L2Only` | **C02+C14+C15**（chat 拼设置/登录/角色；health 后 export） |
+| **日常 L2** | `./run_benchmark.ps1 -L2Only` | **C02+C14+C15**（chat → health；FAIL 则打回 AI 纠偏再扫 → export） |
 | **日常合计** | `./run_benchmark.ps1 -L2` | 上述 L1 + L2 |
-| **按需** | `-L2Only -Cases C15` 或 `-L1Only -Cases E12` | 显式 ID |
+| **按需** | `-L2Only -Cases "C15"` 或 `-L1Only -Cases E12` | 显式 ID |
 
-`-FullDev` 已废除。不要「跑齐所有 E/C」。
+`-FullDev` 已废除。不要「跑齐所有 E/C」。  
+纠偏次数：`-RemediationMax 1`（默认）或环境变量 `UTAGENT_HEALTH_REMEDIATION_MAX`（上限 2）。
 
 **正式拼 UI = L2 chat。** 预写整页 `golden_path` 已归档，禁止加回日常。  
-**审阅：** `TestFixtures/UIPanels/Wnd*.prefab`（L2 health PASS 后 export，非 L1 golden）。
+**审阅：** `TestFixtures/UIPanels/Wnd*.prefab`（最终 health PASS 后 export，非 L1 golden）。
+
+## L2 闭环
+
+```
+chat → health
+  FAIL → 不清 history，把失败 JSON 打回 Agent（限次）→ 再 health
+  PASS → export fixtures
+```
 
 ## 根目录只放日常必要
 

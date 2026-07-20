@@ -1,9 +1,10 @@
 ﻿# UI 拼装验收 — 两档入口（无全量）
 #   ./run_benchmark.ps1                 # 日常 L1：E16/E17 门禁冒烟（无面板 golden）
-#   ./run_benchmark.ps1 -L2Only         # 日常 L2：C02+C14+C15（chat 拼 UI；health 后 export）
+#   ./run_benchmark.ps1 -L2Only         # 日常 L2：C02+C14+C15（chat→health→FAIL则打回AI→export）
 #   ./run_benchmark.ps1 -L2             # 日常 L1 + L2
 #   ./run_benchmark.ps1 -L2Only -Cases C15
 #   ./run_benchmark.ps1 -L1Only -Cases E12
+#   ./run_benchmark.ps1 -L2Only -RemediationMax 2
 # 正式拼 UI = L2；面板 golden 已归档。退出码：全绿 0，任一失败非 0。
 # 加测约定见 README.md / suite_map.json
 
@@ -12,7 +13,8 @@ param(
     [switch]$L1Only,
     [switch]$L2Only,
     [switch]$FullDev,
-    [string]$Cases = ""
+    [string]$Cases = "",
+    [int]$RemediationMax = -1
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +30,19 @@ if ($L1Only -and $L2Only) {
     Write-Host "ERROR: -L1Only 与 -L2Only 互斥" -ForegroundColor Red
     exit 2
 }
+
+# 纠偏次数：参数 > 环境变量 > 默认 1；硬上限 2
+$remediationMax = 1
+if ($RemediationMax -ge 0) {
+    $remediationMax = $RemediationMax
+} elseif (-not [string]::IsNullOrWhiteSpace($env:UTAGENT_HEALTH_REMEDIATION_MAX)) {
+    $parsed = 0
+    if ([int]::TryParse($env:UTAGENT_HEALTH_REMEDIATION_MAX, [ref]$parsed)) {
+        $remediationMax = $parsed
+    }
+}
+if ($remediationMax -lt 0) { $remediationMax = 0 }
+if ($remediationMax -gt 2) { $remediationMax = 2 }
 
 $runL1 = -not $L2Only
 $runL2 = $L2Only -or ($L2 -and -not $L1Only)
@@ -85,6 +100,16 @@ import ui_panel_scope as scope
 print(scope.destroy_named_roots($namesLit))
 "@
     Invoke-Utagent -CmdArgs @("exec", "--code", $code) | Out-Null
+}
+
+function Invoke-UiHealth {
+    param([string]$Roots)
+    # CLI 环境变量进不了 Unity 内 Python；写请求文件（与 export 同模式）
+    if (-not (Test-Path $TmpDir)) { New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null }
+    $healthRootsFile = Join-Path $TmpDir "_health_roots.txt"
+    [System.IO.File]::WriteAllText($healthRootsFile, $Roots + "`n", [System.Text.UTF8Encoding]::new($false))
+    $out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_ui_scene_health.py"))
+    return (Get-JsonLine -Text $out)
 }
 
 function Resolve-L1Script {
@@ -252,21 +277,53 @@ if ($runL2) {
 
         $healthRoots = $uiHealthRoots[$c]
         if ($null -ne $healthRoots) {
-            $env:UTAGENT_HEALTH_ROOTS = $healthRoots
-            $hout = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_ui_scene_health.py"))
-            Remove-Item Env:UTAGENT_HEALTH_ROOTS -ErrorAction SilentlyContinue
-            $hj = Get-JsonLine -Text $hout
+            $hj = Invoke-UiHealth -Roots $healthRoots
             $hOk = $false
-            if ($hj) {
-                $hOk = $hj.ok -eq $true
-                $integ = ""
-                if ($null -ne $hj.integrity_ok) {
-                    $integ = " integ=$($hj.integrity_ok)"
+            if ($hj) { $hOk = $hj.ok -eq $true }
+
+            $remediationStatus = "skipped"
+            $remediationAttempts = 0
+            while ((-not $hOk) -and ($remediationAttempts -lt $remediationMax)) {
+                if (-not (Test-Path $TmpDir)) { New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null }
+                $healthJsonPath = Join-Path $TmpDir "_health_$c.json"
+                if ($hj) {
+                    $jsonText = ($hj | ConvertTo-Json -Depth 12 -Compress)
+                    [System.IO.File]::WriteAllText($healthJsonPath, $jsonText + "`n", [System.Text.UTF8Encoding]::new($false))
+                } else {
+                    [System.IO.File]::WriteAllText($healthJsonPath, '{"ok":false,"error":"health parse fail"}' + "`n", [System.Text.UTF8Encoding]::new($false))
                 }
+                $promptOut = & python (Join-Path $BenchDir "format_health_remediation_prompt.py") $healthJsonPath $healthRoots 2>&1 | Out-String
+                if ([string]::IsNullOrWhiteSpace($promptOut) -or $LASTEXITCODE -ne 0) {
+                    $remediationStatus = "exhausted"
+                    break
+                }
+                $remediationAttempts++
+                Write-Host "  remediation $c attempt=$remediationAttempts/$remediationMax ..."
+                # 不清 history：在同会话打回 AI
+                Invoke-Utagent -CmdArgs @("chat", $promptOut.TrimEnd(), "--compact") | Out-Null
+                $hj = Invoke-UiHealth -Roots $healthRoots
+                $hOk = $false
+                if ($hj) { $hOk = $hj.ok -eq $true }
+                if ($hOk) {
+                    $remediationStatus = "fixed"
+                } else {
+                    $remediationStatus = "exhausted"
+                }
+            }
+
+            $remOk = $remediationStatus -ne "exhausted"
+            Add-Result -Id "$c-remediation" -Ok $remOk -Detail "status=$remediationStatus attempts=$remediationAttempts max=$remediationMax"
+
+            $integ = ""
+            if ($hj -and ($null -ne $hj.integrity_ok)) {
+                $integ = " integ=$($hj.integrity_ok)"
+            }
+            if ($hj) {
                 Add-Result -Id "$c-health" -Ok $hOk -Detail "outside=$($hj.outside_canvas_count) zero=$($hj.zero_size_count) miss_pref=$($hj.missing_preferred_count)$integ"
             } else {
                 Add-Result -Id "$c-health" -Ok $false -Detail "parse fail"
             }
+
             $exportRoot = $uiExportRoots[$c]
             if ($hOk -and ($null -ne $exportRoot)) {
                 if (-not (Test-Path $TmpDir)) { New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null }

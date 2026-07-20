@@ -64,6 +64,8 @@ CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 ping    # engine_available: true
 ```
 
+域重载后执行 `init` 即可恢复（同 `PythonHome` / dll，**无需**重启 Unity Editor）。若更换 `python*.dll` 后初始化仍失败（Runtime.PythonDLL 锁定），请**重启 Unity Editor** 再 `init`——脚本编译无法解除该锁定。
+
 域重载会停止 HTTP 监听；重新打开 **Agent Chat** 或 Settings → ③ CLI 点「保存 CLI 设置」可恢复监听。
 
 ## Cursor Skill
