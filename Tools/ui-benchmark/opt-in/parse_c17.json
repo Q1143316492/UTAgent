@@ -1,0 +1,208 @@
+{
+  "turns": [
+    {
+      "id": "a212",
+      "begin": "00:59:59",
+      "end": null,
+      "outcome": null,
+      "steps": 17
+    }
+  ],
+  "loadSkill_calls": [
+    {
+      "name": "editor-ui",
+      "status": "ok",
+      "ts": "01:00:06"
+    }
+  ],
+  "exec_steps": 14,
+  "before_exec_decisions": [
+    {
+      "domain": "code-too-long",
+      "skill_state": "4480 chars",
+      "action": "inject reminder",
+      "ts": "01:01:19"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:01:28"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:01:33"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:01:40"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:01:45"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:01:53"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:02:06"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:02:12"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:02:24"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:02:29"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:02:41"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:02:49"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:03:07"
+    },
+    {
+      "domain": "non-ui",
+      "skill_state": "-",
+      "action": "allow",
+      "ts": "01:03:11"
+    },
+    {
+      "domain": "ui-domain",
+      "skill_state": "loaded",
+      "action": "allow",
+      "ts": "01:03:24"
+    }
+  ],
+  "after_tool_decisions": [
+    {
+      "domain": "truncate",
+      "detail": "10963 chars",
+      "action": "rewrite",
+      "ts": "01:02:49"
+    }
+  ],
+  "llm_prepare_stats": [
+    {
+      "reminder_in_history": 0,
+      "reminder_in_llm": 0,
+      "ts": "00:59:59"
+    },
+    {
+      "reminder_in_history": 0,
+      "reminder_in_llm": 0,
+      "ts": "01:00:06"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:01:19"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:01:28"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:01:33"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:01:40"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:01:45"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:01:53"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:02:06"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:02:12"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:02:24"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:02:29"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:02:41"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:02:49"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:03:07"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:03:11"
+    },
+    {
+      "reminder_in_history": 1,
+      "reminder_in_llm": 1,
+      "ts": "01:03:24"
+    }
+  ],
+  "step_markers": 17,
+  "parse_warnings": []
+}

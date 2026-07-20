@@ -1,131 +1,40 @@
 # UTAgent
 
-Unity Editor 内 LLM Agent 插件（Python + `execPython` / `loadSkill`）。
+Unity Editor 内的 LLM Agent：用 Python（`execPython` / `loadSkill`）操控场景与 UI，可选 CLI 给 Cursor 等外挂编排。
 
 ## 安装
 
-将本仓库放到目标 Unity 项目的 `Assets/UTAgent/`。
+把本仓库放到目标项目的 `Assets/UTAgent/` 后，**按环境初始化 skill 做一次即可**：
 
-```bash
-git clone git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
-```
+→ [`Docs/skills/utagent-env-bootstrap/SKILL.md`](Docs/skills/utagent-env-bootstrap/SKILL.md)
 
-或在父项目中使用 submodule：
+（PythonHome、IDE skill、`UTAGENT_API_KEY`、Settings 初始化引擎都在该 skill 里。）
 
-```bash
-git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
-```
+配置 / Chat / Session / CLI / 目录等**操作细则**见 → [`Docs/setup-and-config.md`](Docs/setup-and-config.md)
 
-### 快速上手
+## 功能特性
 
-日常只需配置 **API Key**（默认环境变量名 `UTAGENT_API_KEY`）：
+| 能力 | 说明 |
+|------|------|
+| **Editor Chat** | 窗口内 ReAct：LLM → `execPython` / `loadSkill` → 观察回灌 |
+| **Remote CLI** | `ping` / `exec` / `chat` / `screenshot` / `log`；外挂多次单步操控 Editor |
+| **unity 动词 + CS.*** | L1 场景/截图/自省；不够再 `from unity_bind import CS` |
+| **Skills / Hooks** | 按需 `loadSkill`（如 `editor-ui`）；before/after-exec 守卫 |
+| **Session** | 可恢复会话 JSONL；审计 `agent_*.log` |
+| **拼 UI harness** | L1 门禁 + L2 chat 验收（设置/登录/角色等）；见 `Docs/ui-assembly-benchmark.md` |
 
-```powershell
-$env:UTAGENT_API_KEY = "sk-..."
-```
+扩展落点：[`Docs/extension-points.md`](Docs/extension-points.md)。Cursor 侧 skill 源：`agent-skills/utagent-unity-exec/`（由 bootstrap 安装）。
 
-若在 Windows「用户变量」中新增，需**完全退出并重启 Unity Editor** 后进程才会继承。
+## 开发进度（早期）
 
-新机可选：
+重心是 **拼 UI 评测闭环**（文字 brief → Chat/L2 → health → 目检），CLI 能力面已够用、默认冻结扩张。
 
-```powershell
-./Assets/UTAgent/Tools/bootstrap/Install-PythonHome.ps1
-./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1
-```
+已对齐：Chat + CLI、hooks/skills/session、日常 harness、Agent 结构分夹（`Loop` / `Session` / `UI`）。
 
-或在 `Window/UT Agent/Settings` → **Python** 点「下载并初始化」。详见 `Docs/skills/utagent-env-bootstrap/SKILL.md`。
+### 早期成果：全屏标题屏（L2 chat）
 
-然后 `Window/UT Agent/Agent Chat` 发消息即可（Python / CLI 按需自动就绪）。
+结构化 brief（纯文本模型、不喂参考图）拼出星露谷风格主菜单骨架——`WndTitle` + 标题牌 + 底栏四钮。health 全绿；美术按约定降级为纯色块。
 
-### 配置（`Window/UT Agent/Settings`）
+![WndTitle early — Stardew-like title screen via L2 chat](Docs/examples/wndtitle-stardew-early.png)
 
-| Tab | 内容 |
-|-----|------|
-| 大模型 | **主要配置**：Provider / Model、Max Steps、API Key 环境变量名 |
-| Python | 一行状态 + 主按钮（缺则下载并初始化）；路径/重置在「高级」 |
-| CLI | Remote CLI 启用与端口（**默认开启**） |
-| 日志 | 目录（默认 `Assets/UTAgent/LOG/`） |
-
-- **配置文件**：`Config/utagent.defaults.json`（跟踪版本）+ `Config/utagent.local.json`（gitignore，用户覆盖）
-- **API Key**：仅存环境变量，不写入 JSON
-- **Python**：只认 `Assets/UTAgent/PythonHome/`（含 `python312.dll`）；忽略 json/`PYTHONHOME`/本机探测
-- **Editor 启动**：不自动迁移配置、不自动启 CLI；打开 Chat 时按 json 同步 CLI 监听
-- **发消息**：自动 `Initialize` + `ConfigureFromConfig`（前提：API Key 与 PythonHome 就绪）
-
-### Agent 编排（仅 JSON，不进 Settings 面板）
-
-Harness 旋钮只改配置文件，改完需 `UTAgentConfig.Reload()`（或重启 Editor / 重开 Settings 触发加载）。在 `llm` 段：
-
-| 字段 | 默认 | 说明 |
-|------|------|------|
-| `afterToolTruncateChars` | `8000` | 单条 tool stdout 超长则截断再进 history；`0`=关 |
-| `noProgressEnabled` | `false` | 连续纯侦察空转时 after-tool 注入提醒；日常建议保持关 |
-| `noProgressStreak` | `3` | 触发阈值；仅 `noProgressEnabled=true` 时生效 |
-
-示例（写入 `utagent.local.json` 覆盖）：
-
-```json
-{
-  "llm": {
-    "afterToolTruncateChars": 8000,
-    "noProgressEnabled": false,
-    "noProgressStreak": 3
-  }
-}
-```
-
-回归：截断见 L2 C12；无进展见 L2 C13（测时临时开 `noProgressEnabled`）。
-
-**运行中改指令（Chat）**：Enter 有内容 → 入「待发送」队列；点队列「发送」或**空 Enter**（队列非空）→ Abort 后写入 history 并续跑。Stop 急停并清空队列。换行快捷键暂未开放。Runner 仍保留软 `Steer` / `FollowUp` API。
-
-**项目指令（AGENTS.md）**：对齐 Pi。按序加载项目根 `AGENTS.md`，否则 `Assets/UTAgent/AGENTS.md`；**不**自动加载 `CLAUDE.md`。内容进 system 的 `## Project Instructions`（默认最多 4000 字符）。与 `loadSkill`（领域手册）、before-exec（机械拦截）分工：本文件只写短禁令/政策。改文件后需刷新 Python 或新 turn。
-
-**会话持久化（Session）**：对齐 Pi SessionManager 子集。对话落在 `{LOG}/sessions/{id}.jsonl`（header + `id`/`parentId`），`current.session` 记当前打开。Chat：**新建**（空会话不刷文件；有内容则旧文件保留、草稿待首条消息再落盘）、**会话…**（打开/删除/清空会话/清空全部）。Clear = 新建。打开 Chat 默认续最近**非空**会话。审计用 `agent_*.log` 不变。`/tree` 延后见 doc 17。
-
-> 注：曾规划的「更换/清除外部 Python 路径」UI（`fix-python-config-ux`）已被本方案取代，不再支持选本机 Programs\Python。
-
-## CLI
-
-```powershell
-./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 ping
-./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 exec --code "from unity.scene_view import get_hierarchy; print(get_hierarchy('Canvas', echo=False))"
-```
-
-详见 `Tools/utagent-cli/README.md`。
-
-## unity 模块
-
-`unity` 按域拆 4 子模块：`unity.scene_view` / `unity.screenshot` / `unity.inspect` / `unity.console`。`unity.<verb>` 顶层路径仍可用（兼容层）。详见 `Python/agent/skills/python-interop.md.txt`。
-
-## 目录结构
-
-```
-Assets/UTAgent/
-├── Editor/          C# Editor 程序集（Agent / Core / PythonInterop / RemoteCli / Config）
-├── Runtime/         C# Runtime 程序集（Engine / Play）
-├── Python/          Python 资源（agent / unity / unity_bind）
-├── Scripts/         业务 UI 面板 .py
-├── Tools/           utagent-cli、ui-benchmark、bootstrap
-├── Docs/            包内文档、skills、基准
-├── Config/          utagent.defaults.json + utagent.local.json（用户覆盖）
-├── PythonHome/      嵌入式 CPython（gitignore；仅认此目录）
-├── LOG/             Agent 审计日志 + sessions/ 可恢复会话 JSONL（gitignore）
-└── agent-skills/    编码助手 skill 源（Install-IdeSkills.ps1 可拷到各工具 skills 目录）
-```
-
-## Cursor Skill
-
-```powershell
-./Assets/UTAgent/Tools/bootstrap/Install-IdeSkills.ps1
-```
-
-或手动复制 `agent-skills/utagent-unity-exec/` 到当前工具的 skills 目录（Cursor 常见为 `.cursor/skills/`）。
-
-环境初始化手册：`Docs/skills/utagent-env-bootstrap/SKILL.md`。
-
-## Docs / Benchmark
-
-- `Docs/ui-assembly-benchmark.md` — UI 拼装验收基准（L0/L1/L2 用例表 + 结果列，唯一真源）
-- `Tools/ui-benchmark/` — benchmark 脚本（`golden_path_*.py` L1、`parse_agent_log.py` log 解析、`run_benchmark.ps1` 一键回归）
-
-改 UI 相关代码后，跑 `Tools/ui-benchmark/run_benchmark.ps1` 回归 UI 拼装能力。
+> **2026-07 早期样例**，证明「文字 → Canvas」可交付可读界面。日常回归仍以 [`Docs/ui-assembly-benchmark.md`](Docs/ui-assembly-benchmark.md) 的 C02/C14/C15 为准。后续练习可继续压网格/HUD/对白框等布局，顺带挖 harness 缺口。

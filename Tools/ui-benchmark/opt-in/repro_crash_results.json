@@ -1,0 +1,261 @@
+{
+  "elapsed_s": 19.2,
+  "crashed": false,
+  "crash_at": null,
+  "by_variant": {
+    "A_ui_only": {
+      "ok": 10,
+      "total": 10
+    },
+    "B_save_only": {
+      "ok": 10,
+      "total": 10
+    },
+    "C_full_combo": {
+      "ok": 10,
+      "total": 10
+    }
+  },
+  "results": [
+    {
+      "variant": "A_ui_only",
+      "round": 1,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 2,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 3,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 4,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 5,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 6,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 7,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 8,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 9,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "A_ui_only",
+      "round": 10,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"A_ui_only\", \"results\": {\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx"
+    },
+    {
+      "variant": "B_save_only",
+      "round": 1,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 2,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 3,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 4,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 5,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 6,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 7,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 8,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 9,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "B_save_only",
+      "round": 10,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"variant\": \"B_save_only\", \"save\": {\"success\": true, \"scene\": \"New Scene\", \"path\": \"Assets/Scenes/New Scene.unity\"}} "
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 1,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 2,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 3,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 4,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 5,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 6,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 7,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 8,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 9,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    },
+    {
+      "variant": "C_full_combo",
+      "round": 10,
+      "exec_exit": 0,
+      "alive": true,
+      "ok": true,
+      "snippet": "{\"WndSettings\": {\"w\": 100.0, \"h\": 100.0}, \"PanelBody\": {\"w\": 100.0, \"h\": 100.0}, \"TxtTitle\": {\"w\": 100.0, \"h\": 100.0}, \"RowMusic\": {\"w\": 100.0, \"h\": 100.0}, \"RowSfx\": {\"w\": 100.0, \"h\": 100.0}, \"PanelB"
+    }
+  ]
+}

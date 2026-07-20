@@ -1,0 +1,28 @@
+拼全屏主菜单 WndTitle（星露谷标题屏结构近似，勿像素级；禁止套成居中小卡片）
+
+根: WndTitle 全屏挂 Canvas（RectTransform stretch 四边 0）
+背景: ImgSky 全屏，纯色天蓝 #4EC3F7（无云图资源就用纯色）
+
+标题区（水平垂直偏上居中，勿做成整窗小卡片）:
+  PanelTitleSign 木牌感（浅木底 #E8D4A8 + 深木边 #6B4A2A），约 720x200
+  TxtTitle 文案「星露谷物语」大号深棕/红棕，居中
+
+底栏主按钮（水平居中，靠近底边上方）:
+  PanelMenuRow HorizontalLayoutGroup spacing=24
+    BtnNew「创建」 preferred 140x140；TxtLabel + 可选绿芽色块 ImgIcon
+    BtnLoad「加载」同上；粉红图标块
+    BtnCoop「合作」同上；蓝绿图标块
+    BtnExit「退出」同上；棕色图标块
+  每钮 Image 木色底 + Button；红字 TMP；图标在文字下方
+
+右下小钮竖排（贴主按钮行右侧）:
+  PanelSideTools VerticalLayoutGroup
+    BtnLang ~64x64（可用红色几何示意）
+    BtnHelp ~64x64（TMP「?」即可）
+
+角标可选: BtnMusic 左上 ~48；BtnDisplay 右上 ~48
+
+硬规则:
+- 命名英文 PascalCase；中文只进 TMP.text
+- 凡 LayoutGroup：childControlWidth/Height=True；给 preferred；ForceUpdateCanvases 后 print 关键节点 w/h，任一<=1 立刻修
+- 先 loadSkill(editor-ui)；拼完 print JSON 自检；可 save_scene
