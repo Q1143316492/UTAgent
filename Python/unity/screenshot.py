@@ -18,9 +18,9 @@ from ._common import _bridge, _validate_dims
 
 
 def _screenshots_dir() -> str:
-    # Assets/UTAgent/Python/unity → Assets/UTAgent/LOG/screenshots
+    # Assets/UTAgent/Python/unity → Assets/UTAgent/Out/screenshots
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.normpath(os.path.join(here, "..", "..", "LOG", "screenshots"))
+    return os.path.normpath(os.path.join(here, "..", "..", "Out", "screenshots"))
 
 
 def _write_png_from_result(result: dict, path: str | None) -> dict:
@@ -62,7 +62,7 @@ def capture_screenshot(max_width=512, max_height=512, save_to_file=False, path=N
 
     max_width/max_height: 64-1920/64-1080 整数，默认 512
     save_to_file: True 时写 PNG 并返回 path（无 __image）；False 时返回 __image（Agent 用）
-    path: 可选显式输出路径；默认 LOG/screenshots/shot_*.png
+    path: 可选显式输出路径；默认 Out/screenshots/shot_*.png
     """
     _validate_dims(max_width, max_height, "capture_screenshot")
     result = json.loads(_bridge().CaptureScreenshot(max_width, max_height))

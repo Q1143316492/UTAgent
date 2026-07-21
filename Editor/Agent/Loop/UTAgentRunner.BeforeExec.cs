@@ -1,12 +1,14 @@
 using System;
 using System.Text.RegularExpressions;
+using UTAgent.Editor.Core;
 using Debug = UnityEngine.Debug;
 
 namespace UTAgent.Editor.Agent
 {
     public sealed partial class UTAgentRunner
     {
-        // ----- before-exec 域校验（对齐 Pi beforeToolCall 扩展点） -----
+        // ----- before-exec（对齐 Pi beforeToolCall）-----
+        // L1 全局策略 → UTAgentExecPolicy；以下为 Chat 域规则（依赖 history / UI 语义）
 
         /// <summary>
         /// UI 强信号：Wnd* 命名。
@@ -52,36 +54,6 @@ namespace UTAgent.Editor.Agent
         private static readonly Regex sDescribeGo = new Regex(@"describe_go", RegexOptions.Compiled);
 
         /// <summary>
-        /// 重型全量反射：GetComponents(typeof(Component)) / GetComponents(...Component) 及 InParent/InChildren。
-        /// 不拦指定类型如 GetComponents(Image)。
-        /// </summary>
-        private static readonly Regex sHeavyReflection = new Regex(
-            @"GetComponents(?:InParent|InChildren)?\(\s*(?:typeof\s*\(\s*Component\s*\)|(?:[A-Za-z_][A-Za-z0-9_.]*\.)?Component\s*)(?:,[^)]*)?\)",
-            RegexOptions.Compiled);
-
-        /// <summary>
-        /// 危险磁盘递归：os.walk(…)。主线程扫盘易卡住 Editor。
-        /// </summary>
-        private static readonly Regex sOsWalk = new Regex(@"os\.walk\s*\(", RegexOptions.Compiled);
-
-        /// <summary>
-        /// 危险磁盘递归：Path.rglob(…) / .rglob(…)。
-        /// </summary>
-        private static readonly Regex sPathRglob = new Regex(@"\.rglob\s*\(", RegexOptions.Compiled);
-
-        /// <summary>
-        /// 危险磁盘递归：glob.glob/iglob(…, recursive=True)。
-        /// </summary>
-        private static readonly Regex sGlobRecursive = new Regex(
-            @"glob\.(?:glob|iglob)\s*\([^)]*recursive\s*=\s*True",
-            RegexOptions.Compiled);
-
-        /// <summary>
-        /// 单步代码体积上限（防 ReAct 雪球长脚本）。
-        /// </summary>
-        private const int kCodeSizeLimit = 4000;
-
-        /// <summary>
         /// LayoutGroup 创建（项目配方：同段须设 childControl*）。
         /// </summary>
         private static readonly Regex sAddLayoutGroup = new Regex(
@@ -103,8 +75,8 @@ namespace UTAgent.Editor.Agent
             RegexOptions.Compiled);
 
         /// <summary>
-        /// exec 前置域校验：UI 域 exec 未 load 对应 skill 时拦截，注入 user 提醒。
-        /// 对齐 Pi beforeToolCall 扩展点。返回 true 放行；false 拦截（已注入提醒，调用方 continue 跳过本轮 exec）。
+        /// exec 前置校验：先 L1 共享策略，再 Chat 域规则。
+        /// 返回 true 放行；false 拦截（已注入提醒，调用方 continue 跳过本轮 exec）。
         /// </summary>
         private bool BeforeExecCheck(TurnState turn, string code)
         {
@@ -113,32 +85,27 @@ namespace UTAgent.Editor.Agent
                 return true;
             }
 
-            // 体积守卫：单步过长（防 ReAct 雪球长脚本），在域判定之前
-            int n = code.Length;
-            if (n > kCodeSizeLimit)
+            // ----- L1 全局（与 CLI 共用 UTAgentExecPolicy）-----
+            UTAgentExecPolicy.Result shared = UTAgentExecPolicy.EvaluateShared(code);
+            if (!shared.Allowed)
             {
-                InjectReminder(turn, $"单步代码过长（{n} chars > {kCodeSizeLimit}），拆成小步或用原语（add_to_layout / add_free_child）。");
-                LogBeforeExec(turn, "code-too-long", $"{n} chars", "inject reminder");
+                InjectReminder(turn, shared.Message);
+                string skillState = shared.Domain == "code-too-long"
+                    ? $"{code.Length} chars"
+                    : "-";
+                LogBeforeExec(turn, shared.Domain, skillState, "inject reminder");
                 return false;
             }
 
-            // 重型全量反射守卫：禁止 GetComponents(typeof(Component)) 等全量反射（易致 Unity 卡死/闪退）
-            if (sHeavyReflection.IsMatch(code))
-            {
-                InjectReminder(turn, "禁止全量反射 GetComponents(typeof(Component))，用 describe_go 或指定具体类型（如 GetComponents(Image)）。");
-                LogBeforeExec(turn, "heavy-reflection", "-", "inject reminder");
-                return false;
-            }
+            // ----- 域规则（仅 Chat；CLI 不跑）-----
+            return BeforeExecDomainCheck(turn, code);
+        }
 
-            // 文件系统危险遍历：os.walk / rglob / 递归 glob（主线程扫盘易卡住 Editor）
-            if (sOsWalk.IsMatch(code) || sPathRglob.IsMatch(code) || sGlobRecursive.IsMatch(code))
-            {
-                InjectReminder(turn,
-                    "禁止 os.walk / Path.rglob / 递归 glob 扫描磁盘（易卡住 Editor）。查找资源请用 CS.UnityEditor.AssetDatabase.FindAssets 或 LoadAssetAtPath。");
-                LogBeforeExec(turn, "fs-walk", "-", "inject reminder");
-                return false;
-            }
-
+        /// <summary>
+        /// Chat 域规则：layout-control、debug/UI skill 门。
+        /// </summary>
+        private bool BeforeExecDomainCheck(TurnState turn, string code)
+        {
             // LayoutGroup 四布尔：AddComponent Layout 后同段须设 childControlWidth/Height
             if (sAddLayoutGroup.IsMatch(code))
             {

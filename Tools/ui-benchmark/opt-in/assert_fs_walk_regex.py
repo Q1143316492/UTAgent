@@ -1,4 +1,4 @@
-# 离线校验 before-exec fs-walk 正则（与 UTAgentRunner.BeforeExec.cs 对齐）
+# 离线校验 fs-walk 正则（与 Editor/Core/UTAgentExecPolicy.cs 对齐）
 import re
 
 s_os_walk = re.compile(r"os\.walk\s*\(")

@@ -14,7 +14,7 @@
 | **日常合计** | `./run_benchmark.ps1 -L2` | 上述 L1 + L2 |
 | **按需** | `-Cases …` | 显式 ID（如钩子 C11） |
 
-**正式拼 UI = L2 chat。** 预写整页 golden（E08/E14/E15）已归档，禁止加回日常。  
+**正式拼 UI 评测 = L2 chat。** 编码助手经 CLI 拼装 + health 是**交付底线**，不得记为日常 L2 PASS。预写整页 golden（E08/E14/E15）已归档，禁止加回日常。  
 **审阅预制体：** `Assets/UTAgent/TestFixtures/UIPanels/`（WndSettings / WndLogin / WndCharacter）；由 L2 **最终** health PASS 后 export（非 L1 golden）。
 
 **加测：** 整页拼 UI 只加 L2；门禁/钩子可加 L1。临时验证放 `opt-in/`，测通且不再需要 → **删脚本**，本表标 **已删**。

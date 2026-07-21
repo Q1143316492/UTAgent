@@ -193,8 +193,11 @@ namespace UTAgent.Editor.Config
 
         private void DrawLogTab()
         {
-            mLogDirectory = EditorGUILayout.TextField("日志目录", mLogDirectory);
+            mLogDirectory = EditorGUILayout.TextField("运行产物目录", mLogDirectory);
             EditorGUILayout.LabelField("默认", UTAgentSessionLogger.GetDefaultLogDirectory());
+            EditorGUILayout.HelpBox(
+                "子目录：logs/（审计）、screenshots/、sessions/、exec/（临时 --file 脚本）",
+                MessageType.Info);
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("保存", GUILayout.Height(30)))
@@ -202,7 +205,7 @@ namespace UTAgent.Editor.Config
                 SaveLogSettings();
             }
 
-            if (GUILayout.Button("打开日志目录", GUILayout.Height(30)))
+            if (GUILayout.Button("打开产物目录", GUILayout.Height(30)))
             {
                 UTAgentSessionLogger.RevealLogDirectory();
             }

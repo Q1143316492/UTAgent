@@ -13,6 +13,8 @@ import urllib.request
 from typing import Any
 from urllib.parse import quote
 
+import skill_catalog
+
 
 DEFAULT_PORT = 17861
 EXIT_OK = 0
@@ -455,7 +457,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="scene",
         help="scene=Scene 视图（默认）；game=Game 视图（非 Play 时回退 Scene）",
     )
-    p_shot.add_argument("--out", help="输出 PNG 路径（默认 LOG/screenshots/shot_*.png）")
+    p_shot.add_argument("--out", help="输出 PNG 路径（默认 Out/screenshots/shot_*.png）")
     p_shot.add_argument("--width", type=int, default=512)
     p_shot.add_argument("--height", type=int, default=512)
     p_shot.set_defaults(func=cmd_screenshot)
@@ -475,6 +477,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_chat.add_argument("--compact", action="store_true", help="等待时单行刷新进度")
     p_chat.set_defaults(func=cmd_chat)
+
+    p_skill = sub.add_parser(
+        "skill",
+        help="领域 skill 目录（对标 Chat Available Skills / loadSkill；离线）",
+    )
+    skill_sub = p_skill.add_subparsers(dest="skill_cmd", required=True)
+
+    p_skill_list = skill_sub.add_parser(
+        "list",
+        help="列出 skills（仅 frontmatter description + 绝对路径）",
+    )
+    p_skill_list.add_argument("--json", action="store_true", help="输出 JSON")
+    p_skill_list.set_defaults(func=skill_catalog.cmd_skill_list)
+
+    p_skill_get = skill_sub.add_parser(
+        "get",
+        help="按 id 输出 skill 全文（对标 loadSkill）",
+    )
+    p_skill_get.add_argument("skill_id", help="如 editor-ui")
+    p_skill_get.add_argument("--json", action="store_true", help="输出 JSON")
+    p_skill_get.set_defaults(func=skill_catalog.cmd_skill_get)
 
     return parser
 

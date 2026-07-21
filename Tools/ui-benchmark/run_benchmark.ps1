@@ -50,7 +50,13 @@ $runL2 = $L2Only -or ($L2 -and -not $L1Only)
 $Root = (Resolve-Path "$PSScriptRoot/../../../..").Path
 $Cli = Join-Path $Root "Assets/UTAgent/Tools/utagent-cli/utagent.py"
 $BenchDir = $PSScriptRoot
-$LogDir = Join-Path $Root "Assets/UTAgent/LOG"
+$OutDir = Join-Path $Root "Assets/UTAgent/Out"
+$LogDir = Join-Path $OutDir "logs"
+# 兼容旧默认 LOG/ 平铺
+if (-not (Test-Path $LogDir)) {
+    $legacy = Join-Path $Root "Assets/UTAgent/LOG"
+    if (Test-Path $legacy) { $LogDir = $legacy }
+}
 $TmpDir = Join-Path $BenchDir ".tmp"
 $ExportReq = Join-Path $TmpDir "_export_root.txt"
 $MapPath = Join-Path $BenchDir "suite_map.json"

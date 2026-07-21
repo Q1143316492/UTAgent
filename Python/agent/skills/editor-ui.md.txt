@@ -1,6 +1,7 @@
 ---
 name: editor-ui
 description: "Editor 拼/改 Canvas UI：命名、布局、配色、预制体、create_* 模板。"
+assert: Tools/ui-benchmark/assert_ui_scene_health.py
 ---
 
 ## 何时用

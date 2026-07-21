@@ -1,0 +1,19 @@
+拼创建角色屏 WndCharacterCreate（星露谷风格结构近似，勿像素级；禁止缩成单张居中小卡片）
+
+全屏 ImgSky 天蓝 #4EC3F7
+中央双栏（木色底 #E8D4A8 + 深边 #6B4A2A）:
+
+左 PanelMain 约 720x520
+  PanelPortrait 头像框约 160x200 + BtnDice + BtnPortraitPrev/BtnPortraitNext
+  三输入（各旁 TxtLabel，Input 须 preferredHeight>0）：InputName「名字」、InputFarm「农场名字」、InputFavorite「最喜欢的东西」
+  RowAnimal：TxtLabel「动物偏好」+ BtnAnimalPrev/Next + 色块示意
+  RowGender：BtnGenderMale / BtnGenderFemale 示意
+  五行选择（每行 TxtLabel + Btn*Prev + TxtValue + Btn*Next）：Skin/Hair/Shirt/Pants/Accessory
+  三组颜色示意（眼睛/头发/裤子）：色条 Image + 数字文本即可，不必真 Slider
+  ToggleSkip「跳过开场动画」+ BtnOk「OK」
+
+右 PanelFarmList 约 120x520：BtnFarm1…BtnFarm7 竖排方块；BtnFarm2 用描边示意选中
+
+外围：BtnMusic 左上、BtnClose 右上、BtnOptions 左下、BtnBack「后退」右下
+
+硬规则：命名英文 PascalCase；中文只进 TMP；Layout childControl+preferred；ForceUpdate 后 print 关键 w/h；先 loadSkill(editor-ui)；可分多步 exec 拼完；可 save_scene

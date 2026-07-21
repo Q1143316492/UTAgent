@@ -7,12 +7,10 @@ description: >-
 
 # UTAgent：用 exec 操控 Unity
 
-核心能力：**`utagent exec` = Editor 内单次 Python**（等价 Agent Chat 的 `execPython`），无 LLM。  
-**本会话（任意编码助手）负责编排**；需要多步时就多次 `exec`，不要用 `utagent chat` 当默认路径。
+核心能力：**`utagent exec` = Editor 内单次 Python**（等价 Agent Chat 的 `execPython` 底层），无本会话 LLM。  
+**本会话（任意编码助手：Cursor / Claude Code / Copilot / Codex 等）负责编排**；需要多步时就多次 `exec`，不要用 `utagent chat` 当默认路径。
 
 对标 Puerts MCP 的 `evalJsCode`：一个「跑一段代码」入口 + 包内 `unity`/`CS` 动词。
-
-适用于能跑终端命令的编码助手（Cursor、Copilot、Claude Code、Codex 等）。
 
 ## CLI 路径
 
@@ -30,22 +28,50 @@ python ./Assets/UTAgent/Tools/utagent-cli/utagent.py <子命令>
 1. utagent ping
 2. 若 engine_available=false → utagent init → 再 ping
 3. 一次或多次：
-   - utagent exec --code '...'   # 主路径：跑 Python 操控 Unity
-   - utagent exec --file path.py
-   - utagent screenshot          # 可选：PNG 落盘 → 本会话读图
-   - utagent log tail / errors   # 可选：诊断
-4. 失败则修代码/再 exec，最多重试 3 轮；不要让用户去 Editor 里点试
+   - utagent exec --file Out/exec/….py   # 推荐：多行/纠偏（PowerShell 勿用长 --code）
+   - utagent exec --code '...'           # 仅极短单行探测
+   - utagent screenshot                  # 可选：PNG → Out/screenshots/ → 本会话读图
+   - utagent log tail / errors           # 可选：诊断（Out/logs/）
+4. 失败则修脚本/再 exec，最多重试 3 轮；不要让用户去 Editor 里点试
 ```
+
+临时脚本推荐目录：`Assets/UTAgent/Out/exec/`（gitignore）。不存在时先建目录，或触发一次 Chat/Settings Ensure。
+
+### 拼 / 改 Canvas UI（Domain Pack: ui）
+
+任务含新建或显著改动 `Wnd*` / Canvas 布局时，在标准流程上 **必须**：
+
+```
+1. 发现配方（对标 Chat Available Skills → loadSkill）：
+   utagent skill list --json
+   → 按 description 选 editor-ui（或已知 id）
+   utagent skill get editor-ui
+   → 或 Read list 返回的绝对 path（同一文件；勿抄整页用例答案进会话常驻）
+2. 多次 exec --file 拼装（照 skill 规则写 Python，脚本放 Out/exec/）
+3. 交付门禁：若 list/get 含 assert 绝对路径，则
+   utagent exec --file <assert 绝对路径>
+   （无 assert 字段时回退：Tools/ui-benchmark/assert_ui_scene_health.py）
+4. health FAIL → 再 exec --file 纠偏，最多再 3 轮；仍失败则如实报告
+5. 按需 screenshot → 本会话识图做审美微调（仍用 exec，不为此改走 chat）
+```
+
+- **交付过 health ≠ L2 用例 PASS**（L2 只评 Editor Chat 跑表）
+- **禁止** 为拼 UI 交付默认调用 `utagent chat`
 
 ## 命令
 
 | 命令 | 用途 |
 |------|------|
-| `exec --code` / `--file` | **主路径**：单次 Python，操作/查询场景与 UI |
+| `exec --file` / `--code` | **主路径**：单次 Python；多步纠偏用 `--file`（`Out/exec/`） |
+| `skill list` / `skill get` | 领域配方目录与全文（绝对路径；拼 UI 前先用） |
 | `screenshot` | 目检辅助：PNG 落盘后由本会话读图 |
 | `log tail` / `errors` | 诊断 |
 | `scene find` | 按名查对象（糖，多数情况 `exec` + `find_objects` 即可） |
-| `chat "..."` | **旁路**：Editor 内 DeepSeek ReAct；不是本会话默认编排手段 |
+| `chat "..."` | **旁路**：Editor 内 DeepSeek ReAct；仅测 Agent / 跑 benchmark 时用 |
+
+## 执行策略（L1，Editor 硬门禁）
+
+CLI `exec` 与 Chat 共用策略：禁止 `os.walk` / `.rglob` / 递归 `glob`；过长单步与全量 `GetComponents(Component)` 也会被拒。查找资源用 `AssetDatabase.FindAssets` / `LoadAssetAtPath`。拒绝时 JSON 含 `ok:false`、`error`（前缀 `[exec-policy:…]`），可能含 `policy` 字段；CLI 退出码 **3**。
 
 ## 高频 exec 配方
 
@@ -60,7 +86,7 @@ python ./Assets/UTAgent/Tools/utagent-cli/utagent.py <子命令>
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 screenshot --view scene
 ```
 
-更复杂的创建/改组件：在一段 `exec` 里组合 `unity.*` / `CS.*`（Editor Agent 侧可 `loadSkill(python-interop)` / `editor-ui`），**不必**为每个动词加 CLI 子命令。
+更复杂的创建/改组件：在一段 `exec` 里组合 `unity.*` / `CS.*`，**不必**为每个动词加 CLI 子命令。
 
 ## 看图
 
@@ -78,6 +104,7 @@ python ./Assets/UTAgent/Tools/utagent-cli/utagent.py <子命令>
 - ❌ 让用户贴 Console（用 `log`）
 - ❌ 跳过 ping 直接 exec
 - ❌ 用 `chat` 当本会话主编排，或对 Editor LLM 问「截图里有什么」
+- ❌ 拼 UI 交付跳过 health，或把 CLI 成功写成 L2 PASS
 
 ## 示例
 
@@ -88,4 +115,4 @@ python ./Assets/UTAgent/Tools/utagent-cli/utagent.py <子命令>
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 log errors
 ```
 
-包内相关：`Tools/utagent-cli/`、`Docs/extension-points.md`（编码助手 skill vs Editor `loadSkill`）。
+包内相关：`Tools/utagent-cli/`、`Docs/extension-points.md`（L0–L3 / Domain Pack）。

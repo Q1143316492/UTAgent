@@ -8,9 +8,12 @@ __pycache__/
 .ruff_cache/
 __pycache__.meta
 
-# 本机 CPython 嵌入与运行时日志（默认路径，见 PythonPathConfig）
+# 本机 CPython 嵌入与运行产物（默认路径，见 PythonPathConfig）
 PythonHome/
 PythonHome.meta
+Out/
+Out.meta
+# 旧默认名残留（迁移前）
 LOG/
 LOG.meta
 

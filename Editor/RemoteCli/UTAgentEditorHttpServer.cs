@@ -487,13 +487,23 @@ namespace UTAgent.Editor.RemoteCli
 
         private static (string Path, List<string> Lines) ReadLatestLogTail(int lineCount)
         {
-            string dir = UTAgentSessionLogger.ResolveLogDirectory();
+            // 优先 Out/logs/；兼容旧产物根平铺的 agent_*.log
+            string auditDir = UTAgentSessionLogger.ResolveAuditLogsDirectory();
+            string rootDir = UTAgentSessionLogger.ResolveLogDirectory();
+            string dir = Directory.Exists(auditDir) ? auditDir : rootDir;
             if (!Directory.Exists(dir))
             {
                 return (null, new List<string>());
             }
 
             string[] files = Directory.GetFiles(dir, "agent_*.log");
+            if (files.Length == 0 && !string.Equals(dir, rootDir, StringComparison.OrdinalIgnoreCase)
+                && Directory.Exists(rootDir))
+            {
+                files = Directory.GetFiles(rootDir, "agent_*.log");
+                dir = rootDir;
+            }
+
             if (files.Length == 0)
             {
                 return (null, new List<string>());

@@ -38,3 +38,11 @@ Unity Editor 内的 LLM Agent：用 Python（`execPython` / `loadSkill`）操控
 ![WndTitle early — Stardew-like title screen via L2 chat](Docs/examples/wndtitle-stardew-early.png)
 
 > **2026-07 早期样例**，证明「文字 → Canvas」可交付可读界面。日常回归仍以 [`Docs/ui-assembly-benchmark.md`](Docs/ui-assembly-benchmark.md) 的 C02/C14/C15 为准。后续练习可继续压网格/HUD/对白框等布局，顺带挖 harness 缺口。
+
+### 早期成果：创建角色屏（Cursor + CLI）
+
+外挂编排第二条路径：Cursor 会话按 `utagent-unity-exec` → `skill list/get` → 多次 `exec --file`（纠偏脚本）→ `screenshot` 目检，修齐 `WndCharacterCreate` 列对齐与孤儿控件。此为**交付样例**，不等于 L2 chat 用例 PASS。
+
+![WndCharacterCreate early — Cursor + utagent exec delivery](Docs/examples/wndcharactercreate-cursor-exec-early.png)
+
+> **2026-07 早期样例**，证明「编码助手 + CLI」可在 Editor 外闭环拼/改 UI；配方与 assert 走 skill catalog，长脚本优先 `--file`（`Out/exec/`）。

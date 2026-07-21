@@ -3,6 +3,7 @@ using UnityEngine;
 using UTAgent.Editor.Agent;
 using UTAgent.Editor.Core;
 using UTAgent.Editor.PythonInterop;
+// UTAgentExecPolicy 在 Core 命名空间（上已 using）
 
 namespace UTAgent.Editor.RemoteCli
 {
@@ -66,6 +67,21 @@ namespace UTAgent.Editor.RemoteCli
                 if (string.IsNullOrWhiteSpace(code))
                 {
                     WriteJson(400, "{\"ok\":false,\"error\":\"missing code\"}");
+                    return;
+                }
+
+                // L1 共享策略（与 Chat before-exec 同源）；拒绝则不执行
+                UTAgentExecPolicy.Result policy = UTAgentExecPolicy.EvaluateShared(code);
+                if (!policy.Allowed)
+                {
+                    string err =
+                        $"[exec-policy:{policy.Domain}] {policy.Message}";
+                    WriteJson(200,
+                        "{\"ok\":false" +
+                        ",\"output\":\"\"" +
+                        $",\"error\":{BridgeJson.EscapeJson(err)}" +
+                        $",\"policy\":{BridgeJson.EscapeJson(policy.Domain)}" +
+                        ",\"engine_available\":true}");
                     return;
                 }
 

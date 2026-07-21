@@ -28,7 +28,7 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 | 大模型 | Provider / Model、Max Steps、API Key 环境变量名 |
 | Python | 状态 +「下载并初始化」；路径/重置在「高级」 |
 | CLI | Remote CLI 启用与端口（默认开启） |
-| 日志 | 目录（默认 `Assets/UTAgent/LOG/`） |
+| 运行产物 | 目录（默认 `Assets/UTAgent/Out/`；子目录 `logs/` / `screenshots/` / `sessions/` / `exec/`） |
 
 - 配置：`Config/utagent.defaults.json` + `Config/utagent.local.json`（gitignore）
 - API Key **不**写入 JSON
@@ -60,7 +60,7 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 
 - 运行中改指令：有内容 Enter →「待发送」；点发送或空 Enter → Abort 后续跑；Stop 急停并清队列
 - **AGENTS.md**：项目根优先，否则包内 `AGENTS.md`；不自动加载 `CLAUDE.md`；进 system「Project Instructions」
-- **Session**：`{LOG}/sessions/{id}.jsonl`；Chat 可新建 / 打开 / 删除；默认续最近非空会话；审计仍用 `agent_*.log`
+- **Session**：`{Out}/sessions/{id}.jsonl`；Chat 可新建 / 打开 / 删除；默认续最近非空会话；审计为 `{Out}/logs/agent_yyyyMMdd.log`
 
 ## CLI
 
@@ -83,7 +83,7 @@ Assets/UTAgent/
 ├── Docs/            包内文档、skills、基准、examples
 ├── Config/          defaults + local（用户覆盖）
 ├── PythonHome/      嵌入式 CPython（gitignore）
-├── LOG/             审计日志 + sessions（gitignore）
+├── Out/             运行产物（gitignore）：logs / screenshots / sessions / exec
 └── agent-skills/    编码助手 skill 源
 ```
 

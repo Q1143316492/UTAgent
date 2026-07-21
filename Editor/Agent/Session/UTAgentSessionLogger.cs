@@ -9,7 +9,7 @@ using UTAgent.Editor.Core;
 namespace UTAgent.Editor.Agent
 {
     /// <summary>
-    /// Agent 会话日志：按小时追加到 agent_yyyyMMdd_HH.log；单轮对话锁定开始时刻的小时，跨小时不拆文件。
+    /// Agent 会话审计日志：按天追加到 Out/logs/agent_yyyyMMdd.log；单轮锁定开始日，跨天不拆文件。
     /// 流式 thinking/stream 在内存聚合后一次性写出，避免逐 token JSON 刷屏。
     /// </summary>
     public sealed class UTAgentSessionLogger
@@ -34,26 +34,56 @@ namespace UTAgent.Editor.Agent
             return Path.GetFullPath(PythonPathConfig.DefaultLogDirectory);
         }
 
+        /// <summary>
+        /// 运行产物根（Out/）：其下 logs、screenshots、sessions、exec。
+        /// </summary>
         public static string ResolveLogDirectory()
         {
             return UTAgentConfig.ResolveLogDirectory();
         }
 
+        /// <summary>
+        /// 审计日志目录：{产物根}/logs/
+        /// </summary>
+        public static string ResolveAuditLogsDirectory()
+        {
+            return Path.Combine(ResolveLogDirectory(), "logs");
+        }
+
+        /// <summary>
+        /// CLI 临时 --file 脚本目录：{产物根}/exec/
+        /// </summary>
+        public static string ResolveExecScriptsDirectory()
+        {
+            return Path.Combine(ResolveLogDirectory(), "exec");
+        }
+
         public static bool EnsureLogDirectory(string directory = null)
         {
-            string dir = string.IsNullOrEmpty(directory) ? ResolveLogDirectory() : Path.GetFullPath(directory);
+            string root = string.IsNullOrEmpty(directory) ? ResolveLogDirectory() : Path.GetFullPath(directory);
             try
             {
-                if (!Directory.Exists(dir))
+                if (!Directory.Exists(root))
                 {
-                    Directory.CreateDirectory(dir);
+                    Directory.CreateDirectory(root);
+                }
+
+                // 固定子目录：日志 / 截图 / session / 临时 exec 脚本
+                string[] subs = { "logs", "screenshots", "sessions", "exec" };
+                for (int i = 0; i < subs.Length; i++)
+                {
+                    string sub = Path.Combine(root, subs[i]);
+                    if (!Directory.Exists(sub))
+                    {
+                        Directory.CreateDirectory(sub);
+                    }
                 }
 
                 return true;
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[UTAgentSessionLogger] 创建日志目录失败：{e.Message}");
+                Debug.LogWarning($"[UTAgentSessionLogger] 创建运行产物目录失败：{e.Message}");
                 return false;
             }
         }
@@ -78,16 +108,17 @@ namespace UTAgent.Editor.Agent
         private static UTAgentSessionLogger BeginSessionBlock(
             string userText, string model, string imagePath, string header)
         {
-            string dir = ResolveLogDirectory();
-            if (!EnsureLogDirectory(dir))
+            string root = ResolveLogDirectory();
+            if (!EnsureLogDirectory(root))
             {
                 return null;
             }
 
+            string dir = ResolveAuditLogsDirectory();
             DateTime turnStart = DateTime.Now;
             string turnId = Guid.NewGuid().ToString("N").Substring(0, 4);
-            string hourStamp = turnStart.ToString("yyyyMMdd_HH");
-            string filePath = Path.Combine(dir, $"agent_{hourStamp}.log");
+            string dayStamp = turnStart.ToString("yyyyMMdd");
+            string filePath = Path.Combine(dir, $"agent_{dayStamp}.log");
 
             try
             {

@@ -20,10 +20,10 @@ namespace UTAgent.Editor.Core
             Path.Combine(PackageRoot, "PythonHome").Replace('\\', '/');
 
         /// <summary>
-        /// Agent 会话日志默认目录（已 gitignore）。
+        /// 运行产物根目录默认路径（已 gitignore）：logs / screenshots / sessions / exec。
         /// </summary>
         public static string DefaultLogDirectory =>
-            Path.Combine(PackageRoot, "LOG").Replace('\\', '/');
+            Path.Combine(PackageRoot, "Out").Replace('\\', '/');
 
         public static string PythonDir =>
             Path.Combine(PackageRoot, "Python").Replace('\\', '/');
