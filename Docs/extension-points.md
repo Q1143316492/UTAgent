@@ -25,8 +25,9 @@ L3 Orchestrator  Editor Chat（评测）vs 编码助手 + CLI（交付）
 |----|----------|------|
 | L1 | Chat `execPython` + CLI `POST /exec` | fs-walk / code-too-long / heavy-reflection |
 | 域钩子 | **仅 Chat** | UI skill 门、layout-control（依赖 history） |
-| 域 assert | 两边可调 | 如 `assert_ui_scene_health.py`（交付门禁 ≠ L2 分数） |
+| 域 assert | 两边可调 | 薄入口 `run_assert_ui_scene_health.py`（交付门禁 ≠ L2 分数；实现见 `assert_ui_scene_health.py`） |
 | L2 评测分 | **仅 Chat 跑表** | 日常 C\*；CLI 交付成功不得记为 L2 PASS |
+| L1 观测 | Chat + CLI | `code-too-long` 等写入 `Out/logs/exec_policy_yyyyMMdd.log`；**勿**未观测就抬 `CodeSizeLimit` 对齐上下文 |
 
 **不要**用含糊的「harness」同时指代评测跑表、执行守卫与交付流程。
 

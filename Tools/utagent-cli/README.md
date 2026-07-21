@@ -88,6 +88,16 @@ CLI：同真源、同渐进方式：
 
 CLI 将此类失败按 **退出码 3** 处理（与 Python `error` 非空相同）。UI skill 门、layout-control **仅 Chat**，CLI 不因「未 loadSkill」拒绝。
 
+**观测（不调 `CodeSizeLimit` 前）：** L1 拒绝写入 `Assets/UTAgent/Out/logs/exec_policy_yyyyMMdd.log`（含 `domain` / `chars` / `source=cli|chat`）。约一日后可汇总：
+
+```powershell
+Select-String -Path Assets/UTAgent/Out/logs/exec_policy_*.log -Pattern "domain=code-too-long" | Measure-Object
+```
+
+**勿**把 4000 直接抬到模型上下文量级；有数据再另开 change 评估（建议下一档仍远低于 100k）。
+
+**UI health 交付：** `utagent exec --file Assets/UTAgent/Tools/ui-benchmark/run_assert_ui_scene_health.py`（薄入口）。
+
 **交付 vs 评测：** 编码助手用 `exec` + 域 assert（如 UI health）做交付底线；日常 L2 chat 跑表才是 Agent 评测分。二者勿混。
 
 ## 退出码

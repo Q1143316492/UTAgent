@@ -27,8 +27,11 @@ chat → health
 
 ## 根目录只放日常必要
 
-- 入口、`assert_ui_scene_health`、`ui_panel_scope`、`export_*`、`parse_agent_log`
+- 入口、`run_assert_ui_scene_health`（薄入口）、`assert_ui_scene_health`（实现）、`ui_panel_scope`、`export_*`、`parse_agent_log`
 - 日常 L1：命名/尺寸冒烟（E16/E17）
+- **交付/CLI health**：请 `exec --file run_assert_ui_scene_health.py`（勿直跑大实现文件，易触发 L1 `code-too-long`）
+- **根级孤儿**：半失败脚本未 `SetParent` 时，即便 `_health_roots` 只写 `Wnd*`，health 仍会报 Canvas 外孤儿
+- **清理孤儿**：`DestroyImmediate` 该名，或 `ui_panel_scope.destroy_named_roots("TxtEnergyLabel")` 等
 
 ## 给以后 AI：怎么加测试
 

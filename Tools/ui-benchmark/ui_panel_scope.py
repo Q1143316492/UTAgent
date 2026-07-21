@@ -89,6 +89,24 @@ INTEGRITY = {
     "WndSettings": {"Row": 2, "Btn": 2},
     # C15：属性 Row + 装备/关闭 Btn；头像区允许 PanelPortrait 或 PanelAvatar（prompt 只说「头像区」）
     "WndCharacter": {"Row": 3, "Btn": 3},
+    # CLI HUD 练习：12 槽 + 三区（精确 Panel 名）
+    "WndStardewHud": {
+        "Slot": 12,
+        "PanelStatus": 1,
+        "PanelHotbar": 1,
+        "PanelEnergy": 1,
+    },
+}
+
+# 1920×1080 参考像素下限（仅声明于此的根在 health 根过滤时检查）
+# 值：(min_w, min_h)；"Slot*" 表示每个 Slot 前缀子节点
+HUD_MIN_SIZES = {
+    "WndStardewHud": {
+        "PanelStatus": (360, 220),
+        "PanelHotbar": (800, 90),
+        "PanelEnergy": (36, 280),
+        "Slot*": (64, 64),
+    },
 }
 
 
@@ -133,3 +151,56 @@ def check_integrity(root_go, root_name=None):
             missing.append("Panel*Avatar|Panel*Portrait")
     ok = len(missing) == 0
     return {"ok": ok, "missing": missing, "counts": counts, "name_count": len(names)}
+
+
+def check_hud_min_sizes(root_go, root_name=None):
+    """1080p 可读尺寸下限；无规则则 ok=true 跳过。"""
+    name = root_name or (root_go.name if root_go is not None else "")
+    rules = HUD_MIN_SIZES.get(name)
+    if rules is None:
+        return {"ok": True, "skipped": True}
+    if root_go is None:
+        return {"ok": False, "error": f"root not found: {name}", "too_small": []}
+    too_small = []
+    for key, (min_w, min_h) in rules.items():
+        if key.endswith("*"):
+            prefix = key[:-1]
+            stack = [root_go.transform]
+            while len(stack) > 0:
+                t = stack.pop()
+                go = t.gameObject
+                if go.name.startswith(prefix) and go.name != root_go.name:
+                    rt = go.GetComponent(CS.UnityEngine.RectTransform)
+                    if rt is not None:
+                        w = float(rt.rect.width)
+                        h = float(rt.rect.height)
+                        if w + 1e-3 < min_w or h + 1e-3 < min_h:
+                            too_small.append({
+                                "name": go.name,
+                                "w": round(w, 1),
+                                "h": round(h, 1),
+                                "min_w": min_w,
+                                "min_h": min_h,
+                            })
+                for i in range(t.childCount):
+                    stack.append(t.GetChild(i))
+            continue
+        go = find_under(root_go, key)
+        if go is None:
+            too_small.append({"name": key, "missing": True, "min_w": min_w, "min_h": min_h})
+            continue
+        rt = go.GetComponent(CS.UnityEngine.RectTransform)
+        if rt is None:
+            too_small.append({"name": key, "error": "no RectTransform"})
+            continue
+        w = float(rt.rect.width)
+        h = float(rt.rect.height)
+        if w + 1e-3 < min_w or h + 1e-3 < min_h:
+            too_small.append({
+                "name": key,
+                "w": round(w, 1),
+                "h": round(h, 1),
+                "min_w": min_w,
+                "min_h": min_h,
+            })
+    return {"ok": len(too_small) == 0, "too_small": too_small[:40]}

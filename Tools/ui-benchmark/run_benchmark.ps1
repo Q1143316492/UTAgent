@@ -114,7 +114,7 @@ function Invoke-UiHealth {
     if (-not (Test-Path $TmpDir)) { New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null }
     $healthRootsFile = Join-Path $TmpDir "_health_roots.txt"
     [System.IO.File]::WriteAllText($healthRootsFile, $Roots + "`n", [System.Text.UTF8Encoding]::new($false))
-    $out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "assert_ui_scene_health.py"))
+    $out = Invoke-Utagent -CmdArgs @("exec", "--file", (Join-Path $BenchDir "run_assert_ui_scene_health.py"))
     return (Get-JsonLine -Text $out)
 }
 

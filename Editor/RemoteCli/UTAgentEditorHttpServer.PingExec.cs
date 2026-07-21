@@ -74,6 +74,7 @@ namespace UTAgent.Editor.RemoteCli
                 UTAgentExecPolicy.Result policy = UTAgentExecPolicy.EvaluateShared(code);
                 if (!policy.Allowed)
                 {
+                    UTAgentExecPolicy.RecordBlock(policy.Domain, code.Length, "cli");
                     string err =
                         $"[exec-policy:{policy.Domain}] {policy.Message}";
                     WriteJson(200,

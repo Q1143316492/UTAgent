@@ -50,7 +50,7 @@ python ./Assets/UTAgent/Tools/utagent-cli/utagent.py <子命令>
 2. 多次 exec --file 拼装（照 skill 规则写 Python，脚本放 Out/exec/）
 3. 交付门禁：若 list/get 含 assert 绝对路径，则
    utagent exec --file <assert 绝对路径>
-   （无 assert 字段时回退：Tools/ui-benchmark/assert_ui_scene_health.py）
+   （无 assert 字段时回退：Tools/ui-benchmark/run_assert_ui_scene_health.py）
 4. health FAIL → 再 exec --file 纠偏，最多再 3 轮；仍失败则如实报告
 5. 按需 screenshot → 本会话识图做审美微调（仍用 exec，不为此改走 chat）
 ```

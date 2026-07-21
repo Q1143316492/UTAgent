@@ -89,6 +89,7 @@ namespace UTAgent.Editor.Agent
             UTAgentExecPolicy.Result shared = UTAgentExecPolicy.EvaluateShared(code);
             if (!shared.Allowed)
             {
+                UTAgentExecPolicy.RecordBlock(shared.Domain, code.Length, "chat");
                 InjectReminder(turn, shared.Message);
                 string skillState = shared.Domain == "code-too-long"
                     ? $"{code.Length} chars"

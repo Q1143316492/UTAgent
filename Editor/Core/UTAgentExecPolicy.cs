@@ -1,4 +1,7 @@
+using System;
+using System.IO;
 using System.Text.RegularExpressions;
+using UTAgent.Editor.Config;
 
 namespace UTAgent.Editor.Core
 {
@@ -10,6 +13,7 @@ namespace UTAgent.Editor.Core
     {
         /// <summary>
         /// 单步代码体积上限（防 ReAct 雪球长脚本）。
+        /// 调限须先观测 Out/logs/exec_policy_*.log；本常量勿对齐模型上下文窗口。
         /// </summary>
         public const int CodeSizeLimit = 4000;
 
@@ -94,10 +98,41 @@ namespace UTAgent.Editor.Core
                 return new Result(
                     false,
                     "fs-walk",
-                    "禁止 os.walk / Path.rglob / 递归 glob 扫描磁盘（易卡住 Editor）。查找资源请用 CS.UnityEditor.AssetDatabase.FindAssets 或 LoadAssetAtPath。");
+                    "禁止 os.walk / Path.rglob / 递归 glob 扫描磁盘（易卡住编辑器）。查找资源请用 CS.UnityEditor.AssetDatabase.FindAssets 或 LoadAssetAtPath。");
             }
 
             return new Result(true, string.Empty, string.Empty);
+        }
+
+        /// <summary>
+        /// 将 L1 拦截写入 Out/logs/exec_policy_yyyyMMdd.log，便于按日汇总（不调限前先观测）。
+        /// source：cli | chat
+        /// </summary>
+        public static void RecordBlock(string domain, int codeChars, string source)
+        {
+            if (string.IsNullOrEmpty(domain))
+            {
+                return;
+            }
+
+            try
+            {
+                string root = UTAgentConfig.ResolveLogDirectory();
+                string logsDir = Path.Combine(root, "logs");
+                if (!Directory.Exists(logsDir))
+                {
+                    Directory.CreateDirectory(logsDir);
+                }
+
+                string path = Path.Combine(logsDir, $"exec_policy_{DateTime.Now:yyyyMMdd}.log");
+                string line =
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\t[exec-policy]\tdomain={domain}\tchars={codeChars}\tsource={source ?? "?"}\tlimit={CodeSizeLimit}";
+                File.AppendAllText(path, line + Environment.NewLine);
+            }
+            catch
+            {
+                // 审计失败不影响主路径
+            }
         }
     }
 }

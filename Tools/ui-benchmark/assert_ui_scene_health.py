@@ -1,5 +1,6 @@
 # 场景 UI 健康扫描：Canvas 外、零/近零尺寸、直挂、非 ASCII 名、Layout 下缺 preferred。
-# 用法：utagent exec --file assert_ui_scene_health.py
+# CLI / skill assert / benchmark：**请跑** run_assert_ui_scene_health.py（薄入口，过 L1 体积限）。
+# 本文件可被 import；直接 exec 本文件可能触发 code-too-long。
 # 可选根过滤（优先顺序）：请求文件 → UTAGENT_HEALTH_ROOTS → 全场景
 # 请求文件：Assets/UTAgent/Tools/ui-benchmark/.tmp/_health_roots.txt（逗号或换行分隔）
 # 只查 GameObject.name，不查 TMP 文案。
@@ -116,7 +117,18 @@ def scan(roots_filter=None):
         name = go.name
         if not _is_ui_name(name):
             continue
-        if not _passes_filter(t, name, filter_set):
+
+        under = (not no_canvas) and _under_canvas(t, canvas_t)
+        # scoped 过滤时仍报告 Canvas 外孤儿（半失败脚本未 SetParent 的假绿来源）
+        if filter_set is not None and not _passes_filter(t, name, filter_set):
+            if no_canvas:
+                outside_canvas.append({"name": name, "reason": "no Canvas", "orphan": True})
+            elif not under:
+                outside_canvas.append({
+                    "name": name,
+                    "parent": t.parent.gameObject.name if t.parent is not None else None,
+                    "orphan": True,
+                })
             continue
 
         if _has_non_ascii(name):
@@ -126,7 +138,7 @@ def scan(roots_filter=None):
             outside_canvas.append({"name": name, "reason": "no Canvas"})
             continue
 
-        if not _under_canvas(t, canvas_t):
+        if not under:
             outside_canvas.append({
                 "name": name,
                 "parent": t.parent.gameObject.name if t.parent is not None else None,
@@ -212,34 +224,42 @@ def main():
     roots = _resolve_roots()
     unity.log("[assert_ui_scene_health] scanning…")
     result = scan(roots)
-    # 已知面板根：尺寸门禁之外还要子树完整性，避免空壳 health 假绿
+    # 已知面板根：完整性 +（HUD）最小尺寸；全场景时对场景中已存在的已知根同样检查
+    import sys as _sys
+    _bench = os.path.join("Assets", "UTAgent", "Tools", "ui-benchmark")
+    for p in (os.path.abspath(_bench), os.path.abspath(".")):
+        if os.path.isdir(p) and p not in _sys.path:
+            _sys.path.insert(0, p)
+    import ui_panel_scope as scope  # noqa: E402
+    known = set(scope.INTEGRITY.keys()) | set(scope.HUD_MIN_SIZES.keys())
     if roots:
-        import sys as _sys
-        _bench = os.path.join("Assets", "UTAgent", "Tools", "ui-benchmark")
-        for p in (os.path.abspath(_bench), os.path.abspath(".")):
-            if os.path.isdir(p) and p not in _sys.path:
-                _sys.path.insert(0, p)
-        import ui_panel_scope as scope  # noqa: E402
-        integ_results = []
-        integ_ok = True
-        for root_name in roots:
-            if root_name not in scope.INTEGRITY:
-                continue
-            go = CS.UnityEngine.GameObject.Find(root_name)
+        check_names = list(roots)
+    else:
+        check_names = [n for n in known if CS.UnityEngine.GameObject.Find(n) is not None]
+    integ_results = []
+    integ_ok = True
+    for root_name in check_names:
+        go = CS.UnityEngine.GameObject.Find(root_name)
+        if root_name in scope.INTEGRITY:
             integ = scope.check_integrity(go, root_name)
             integ_results.append({"root": root_name, **integ})
             if not integ.get("ok"):
                 integ_ok = False
-        if integ_results:
-            result["integrity"] = integ_results
-            result["integrity_ok"] = integ_ok
-            if not integ_ok:
-                result["ok"] = False
-        if os.path.isfile(REQUEST_FILE):
-            try:
-                os.remove(REQUEST_FILE)
-            except OSError:
-                pass
+        if root_name in scope.HUD_MIN_SIZES:
+            sizes = scope.check_hud_min_sizes(go, root_name)
+            integ_results.append({"root": root_name, "kind": "hud_min_sizes", **sizes})
+            if not sizes.get("ok"):
+                integ_ok = False
+    if integ_results:
+        result["integrity"] = integ_results
+        result["integrity_ok"] = integ_ok
+        if not integ_ok:
+            result["ok"] = False
+    if roots and os.path.isfile(REQUEST_FILE):
+        try:
+            os.remove(REQUEST_FILE)
+        except OSError:
+            pass
     print(json.dumps(result, ensure_ascii=False))
 
 

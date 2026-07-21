@@ -1,7 +1,7 @@
 ---
 name: editor-ui
 description: "Editor 拼/改 Canvas UI：命名、布局、配色、预制体、create_* 模板。"
-assert: Tools/ui-benchmark/assert_ui_scene_health.py
+assert: Tools/ui-benchmark/run_assert_ui_scene_health.py
 ---
 
 ## 何时用
@@ -25,6 +25,21 @@ Editor 拼/改 Canvas UI、布局、预制体。
 
 L1 居中卡片（默认）· L2 顶栏+内容 · L3 底栏按钮行 · L4 表单单列 · L5 工具条。`spacing=16` `padding=24`。双按钮用 L1+L3。
 
+### 游戏内 HUD（角锚点，勿套居中卡片）
+
+全屏透明根（如 `WndStardewHud`）+ **角/边锚点**（top-right / bottom-center / bottom-right）；**中间视野留空**。  
+状态/热键栏/资源条用 `add_free_child` 或等价锚点定位，**不要**默认 `create_layout_panel` 居中套路。
+
+**1920×1080 参考可读下限**（有 `CanvasScaler` 时按 reference 像素）：
+
+| 区域 | 下限 |
+|------|------|
+| 角状态面板（如 `PanelStatus`） | 宽 ≥ 360，高 ≥ 220 |
+| 热键槽 `Slot*` | 边长 ≥ 64（目标 72～80） |
+| 竖向精力条（如 `PanelEnergy`） | 高 ≥ 280，宽 ≥ 36 |
+
+根级孤儿（`GameObject` 创建后未 `SetParent` 到 Canvas）：health 会 FAIL。清理：`DestroyImmediate` 该根名，或 `ui_panel_scope.destroy_named_roots(...)`。
+
 ### LayoutGroup 硬规则（违反必出宽高为 0）
 
 Unity 默认：`childForceExpand*=true` 且常 `childControl*=false`。此时子节点若 `sizeDelta.x=0` 且 `LayoutElement.preferredWidth<0`，**宽度塌成 0**（输入框/长文案变成**竖条字**）。
@@ -41,6 +56,7 @@ lg.childForceExpandHeight = False
 - 控尺寸：**只**用 `LayoutElement.preferredWidth/Height`（或 `add_to_layout(..., preferred_w=, preferred_h=)`），**禁止**在 Layout 子节点上手改 `sizeDelta` 指望生效
 - 可拉伸行（输入框底）：`preferredWidth` 可省略，但 **`preferredHeight` 必须 >0**；禁止只设 height、width 仍为 0 的 `sizeDelta`
 - 固定宽子项（按钮）：`preferred_w` 与 `preferred_h` **都要给**
+- **VLG 文本**（`Txt*`）：在 `childForceExpandWidth=False` 时须设 `preferredWidth>0` 或 `flexibleWidth>0`，否则宽塌成 ≈0（竖条字）
 - 拼完后 MUST `print` 关键子节点 `rect.width/height`，任一 `w<=1` 或 `h<=1` → 立刻修，禁止当完成
 
 ### HorizontalLayoutGroup 文本行（名称 + 描述并排）
