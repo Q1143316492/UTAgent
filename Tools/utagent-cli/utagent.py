@@ -362,13 +362,16 @@ def cmd_screenshot(args: argparse.Namespace) -> int:
     out = getattr(args, "out", None)
     max_w = int(getattr(args, "width", 512) or 512)
     max_h = int(getattr(args, "height", 512) or 512)
-    fn = "capture_scene_view" if view == "scene" else "capture_screenshot"
+    name = getattr(args, "name", None)
+    padding = int(getattr(args, "padding", 0) or 0)
     path_arg = "None" if not out else json.dumps(out)
+    name_arg = "None" if not name else json.dumps(name)
     code = (
         "import importlib, json\n"
         "import unity.screenshot as _us\n"
         "importlib.reload(_us)\n"
-        f"r = _us.{fn}(max_width={max_w}, max_height={max_h}, save_to_file=True, path={path_arg})\n"
+        f"r = _us.capture(view={json.dumps(view)}, max_width={max_w}, max_height={max_h}, "
+        f"save_to_file=True, path={path_arg}, name={name_arg}, padding={padding})\n"
         "print(json.dumps(r, ensure_ascii=False))\n"
     )
     status, payload = request_json("POST", "/exec", port, body={"code": code}, timeout=120.0)
@@ -460,6 +463,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_shot.add_argument("--out", help="输出 PNG 路径（默认 Out/screenshots/shot_*.png）")
     p_shot.add_argument("--width", type=int, default=512)
     p_shot.add_argument("--height", type=int, default=512)
+    p_shot.add_argument(
+        "--name",
+        help="按该 UI 物体 RectTransform 屏幕矩形裁切（Overlay / Screen Space Camera）",
+    )
+    p_shot.add_argument("--padding", type=int, default=0, help="裁切外扩像素（默认 0）")
     p_shot.set_defaults(func=cmd_screenshot)
 
     p_chat = sub.add_parser("chat", help="自然语言 ReAct 任务（等同 Chat 发话）")

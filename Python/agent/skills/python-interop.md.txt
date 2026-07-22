@@ -109,7 +109,7 @@ Editor UI 创建/排查时 **优先遵守** 下列规则（硬验收也覆盖这
 | 子模块 | 核心动词 |
 |--------|----------|
 | `unity.scene_view` | `get_hierarchy` / `find_objects` / `destroy_object` / `destroy_all_objects` / `prepare_scene_object` / `create_primitive` / `save_scene` / `select_game_object` / `focus_scene_view_on` / `scene_view_zoom/pan/orbit` / `get/set_scene_view_camera` |
-| `unity.screenshot` | `capture_screenshot` / `capture_scene_view` |
+| `unity.screenshot` | **`capture`**（`view` / `name` 裁切 / `save_to_file`）；旧名 `capture_screenshot` / `capture_scene_view` 仅转发 |
 | `unity.inspect` | `list_namespaces` / `list_editor_namespaces` / `list_types_in_namespace` / `get_type_details` |
 | `unity.console` | `get_logs` / `get_log_summary` / `log` / `log_warning` / `log_error` |
 
@@ -125,8 +125,9 @@ from unity.inspect import get_type_details
 
 ## L1 — `import unity`（动词优先）
 
-- 截图：`unity.capture_scene_view()`（勿 print 含 base64 的返回值）
-- **Cursor / 能看图的模型**：`capture_scene_view(save_to_file=True)` 或 CLI `utagent screenshot` → 用返回的 `path` 做目检
+- 截图：`unity.screenshot.capture(view="scene")`（勿 print 含 base64 的返回值）
+- **Cursor / 能看图的模型**：`capture(..., save_to_file=True)` 或 CLI `utagent screenshot [--name UI节点]` → 用返回的 `path` 做目检
+- 按节点裁切：`capture(view="scene", name="WndStardewHud", save_to_file=True)`（含 World Space Canvas）
 - **DeepSeek / 纯文本模型**：验收用 `find_objects` + `print`，不要为验收调截图；默认 `__image` 会被剥离不送入 LLM
 - 层级：`unity.find_object` / `unity.find_objects` / `unity.get_hierarchy`（`components` 含 `shortName` + `fullName`）
 - 销毁：`unity.destroy_object` / `unity.prepare_scene_object` / `unity.destroy_all_objects`

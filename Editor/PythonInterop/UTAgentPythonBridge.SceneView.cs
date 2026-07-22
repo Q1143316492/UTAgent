@@ -12,9 +12,9 @@ namespace UTAgent.Editor.PythonInterop
     public sealed partial class UTAgentPythonBridge
     {
         /// <summary>
-        /// 捕获 Unity Editor Scene 视图，返回 PNG base64（始终 Scene View，非 Game 视图）。
+        /// 统一截图入口：view=scene|game；可选 name 按 RectTransform 投影矩形裁切（Overlay / Camera / World Space）。
         /// </summary>
-        public string CaptureSceneViewScreenshot(int maxWidth, int maxHeight)
+        public string Capture(string view, int maxWidth, int maxHeight, string name, int padding)
         {
             if (maxWidth < MinScreenshotSize || maxWidth > MaxScreenshotWidth ||
                 maxHeight < MinScreenshotSize || maxHeight > MaxScreenshotHeight)
@@ -22,66 +22,35 @@ namespace UTAgent.Editor.PythonInterop
                 return Error($"截图尺寸须在 {MinScreenshotSize}-{MaxScreenshotWidth}x{MaxScreenshotHeight} 之间");
             }
 
-            try
+            if (padding < 0)
             {
-                var tex = CaptureSceneView(maxWidth, maxHeight);
-                if (tex == null)
-                {
-                    return Error("Scene 视图截图失败：无法获取活动 Scene 视图相机");
-                }
-
-                try
-                {
-                    var bytes = tex.EncodeToPNG();
-                    if (bytes == null || bytes.Length == 0)
-                    {
-                        return Error("截图编码失败");
-                    }
-                    return BuildImageResponse(bytes, "scene");
-                }
-                finally
-                {
-                    UnityEngine.Object.DestroyImmediate(tex);
-                }
-            }
-            catch (Exception e)
-            {
-                return Error($"Scene 视图截图失败：{e.Message}");
-            }
-        }
-
-        /// <summary>
-        /// 捕获当前视图，返回 PNG base64。
-        /// Play Mode 优先使用 Game 视图；失败则回退 Scene 视图（支持纯编辑器验证）。
-        /// </summary>
-        public string CaptureScreenshot(int maxWidth, int maxHeight)
-        {
-            if (maxWidth < MinScreenshotSize || maxWidth > MaxScreenshotWidth ||
-                maxHeight < MinScreenshotSize || maxHeight > MaxScreenshotHeight)
-            {
-                return Error($"截图尺寸须在 {MinScreenshotSize}-{MaxScreenshotWidth}x{MaxScreenshotHeight} 之间");
+                return Error("padding 不能为负");
             }
 
+            string viewKey = (view ?? "scene").Trim().ToLowerInvariant();
+            if (viewKey != "scene" && viewKey != "game")
+            {
+                return Error("view 须为 scene 或 game");
+            }
+
+            bool crop = !string.IsNullOrWhiteSpace(name);
             try
             {
                 Texture2D tex = null;
-                string source = null;
-                if (Application.isPlaying)
+                string source = viewKey;
+                if (viewKey == "game")
                 {
-                    try
+                    tex = CaptureGameFull();
+                    if (tex == null)
                     {
-                        tex = ScreenCapture.CaptureScreenshotAsTexture();
-                        source = "game";
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogWarning($"[UTAgent] Game 视图截图失败，回退到 Scene 视图：{e.Message}");
+                        Debug.LogWarning("[UTAgent] Game 视图截图失败，回退到 Scene 视图");
+                        tex = CaptureSceneViewFull();
+                        source = "scene";
                     }
                 }
-
-                if (tex == null)
+                else
                 {
-                    tex = CaptureSceneView(maxWidth, maxHeight);
+                    tex = CaptureSceneViewFull();
                     source = "scene";
                 }
 
@@ -92,16 +61,38 @@ namespace UTAgent.Editor.PythonInterop
 
                 try
                 {
+                    if (crop)
+                    {
+                        Camera preferCam = null;
+                        if (source == "scene")
+                        {
+                            preferCam = TryGetSceneViewCamera();
+                        }
+
+                        string cropErr = CropTextureToUiNode(ref tex, name.Trim(), padding, preferCam);
+                        if (cropErr != null)
+                        {
+                            return cropErr;
+                        }
+
+                        source = source + "+crop:" + name.Trim();
+                    }
+
+                    tex = ScaleTextureDown(tex, maxWidth, maxHeight);
                     var bytes = tex.EncodeToPNG();
                     if (bytes == null || bytes.Length == 0)
                     {
                         return Error("截图编码失败");
                     }
+
                     return BuildImageResponse(bytes, source);
                 }
                 finally
                 {
-                    UnityEngine.Object.DestroyImmediate(tex);
+                    if (tex != null)
+                    {
+                        UnityEngine.Object.DestroyImmediate(tex);
+                    }
                 }
             }
             catch (Exception e)
@@ -111,9 +102,38 @@ namespace UTAgent.Editor.PythonInterop
         }
 
         /// <summary>
-        /// 通过离屏渲染当前 Scene 视图相机，返回 Texture2D（即使 Play Mode 也可用）。
+        /// 兼容包装 → Capture(view=scene)。
         /// </summary>
-        private static Texture2D CaptureSceneView(int maxWidth, int maxHeight)
+        public string CaptureSceneViewScreenshot(int maxWidth, int maxHeight)
+        {
+            return Capture("scene", maxWidth, maxHeight, null, 0);
+        }
+
+        /// <summary>
+        /// 兼容包装 → Capture(view=game)；无节点裁切时 Game 失败可回退 Scene。
+        /// </summary>
+        public string CaptureScreenshot(int maxWidth, int maxHeight)
+        {
+            return Capture("game", maxWidth, maxHeight, null, 0);
+        }
+
+        private static Texture2D CaptureGameFull()
+        {
+            try
+            {
+                return ScreenCapture.CaptureScreenshotAsTexture();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[UTAgent] Game 视图截图失败：{e.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 离屏渲染当前 Scene 视图相机，按视图像素尺寸取满分辨率（再由调用方缩放/裁切）。
+        /// </summary>
+        private static Texture2D CaptureSceneViewFull()
         {
             try
             {
@@ -141,15 +161,18 @@ namespace UTAgent.Editor.PythonInterop
                     return null;
                 }
 
-                int width = maxWidth;
-                int height = maxHeight;
+                int width = 512;
+                int height = 512;
                 var positionProperty = sceneViewType.GetProperty("position", BindingFlags.Instance | BindingFlags.Public);
                 if (positionProperty != null)
                 {
                     var position = (Rect)positionProperty.GetValue(sceneView);
-                    width = Mathf.Min((int)position.width, maxWidth);
-                    height = Mathf.Min((int)position.height, maxHeight);
+                    width = Mathf.Max(64, (int)position.width);
+                    height = Mathf.Max(64, (int)position.height);
                 }
+
+                width = Mathf.Min(width, MaxScreenshotWidth);
+                height = Mathf.Min(height, MaxScreenshotHeight);
 
                 var rt = new RenderTexture(width, height, 24);
                 var prevTarget = camera.targetTexture;
@@ -171,6 +194,197 @@ namespace UTAgent.Editor.PythonInterop
                 Debug.LogWarning($"[UTAgent] Scene 视图截图失败：{e.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 按 UI 节点屏幕外接矩形裁切；成功返回 null，失败返回 Error JSON。
+        /// preferCamera：Scene 视图截图时传入 SceneView 相机，保证 World Space 投影与纹理一致。
+        /// </summary>
+        private static string CropTextureToUiNode(ref Texture2D tex, string name, int padding, Camera preferCamera)
+        {
+            var matches = CollectGameObjectsByName(name);
+            GameObject go = null;
+            RectTransform rt = null;
+            for (int i = 0; i < matches.Count; i++)
+            {
+                var candidate = matches[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                var candidateRt = candidate.GetComponent<RectTransform>();
+                if (candidateRt == null)
+                {
+                    continue;
+                }
+
+                go = candidate;
+                rt = candidateRt;
+                break;
+            }
+
+            if (go == null || rt == null)
+            {
+                return Error(matches.Count == 0
+                    ? $"找不到 UI 物体：{name}"
+                    : $"物体 '{name}' 无 RectTransform，无法按节点裁切");
+            }
+
+            var canvas = rt.GetComponentInParent<Canvas>();
+            Camera cam = null;
+            if (canvas != null)
+            {
+                if (canvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                {
+                    cam = null;
+                }
+                else if (canvas.renderMode == RenderMode.ScreenSpaceCamera)
+                {
+                    cam = canvas.worldCamera;
+                    if (cam == null)
+                    {
+                        return Error($"Screen Space Camera Canvas 未绑定相机，无法裁切 '{name}'");
+                    }
+                }
+                else
+                {
+                    cam = preferCamera != null
+                        ? preferCamera
+                        : (canvas.worldCamera != null ? canvas.worldCamera : Camera.main);
+                    if (cam == null)
+                    {
+                        cam = TryGetSceneViewCamera();
+                    }
+
+                    if (cam == null)
+                    {
+                        return Error($"World Space Canvas 无可用相机，无法裁切 '{name}'");
+                    }
+                }
+            }
+            else if (preferCamera != null)
+            {
+                cam = preferCamera;
+            }
+
+            var corners = new Vector3[4];
+            rt.GetWorldCorners(corners);
+            float minX = float.PositiveInfinity;
+            float maxX = float.NegativeInfinity;
+            float minY = float.PositiveInfinity;
+            float maxY = float.NegativeInfinity;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector2 sp;
+                if (cam != null)
+                {
+                    Vector3 sp3 = cam.WorldToScreenPoint(corners[i]);
+                    if (sp3.z < 0f)
+                    {
+                        return Error($"节点 '{name}' 不在相机前方，无法裁切");
+                    }
+
+                    sp = new Vector2(sp3.x, sp3.y);
+                }
+                else
+                {
+                    sp = new Vector2(corners[i].x, corners[i].y);
+                }
+
+                minX = Mathf.Min(minX, sp.x);
+                maxX = Mathf.Max(maxX, sp.x);
+                minY = Mathf.Min(minY, sp.y);
+                maxY = Mathf.Max(maxY, sp.y);
+            }
+
+            minX -= padding;
+            maxX += padding;
+            minY -= padding;
+            maxY += padding;
+
+            int refW = cam != null ? Math.Max(1, cam.pixelWidth) : Screen.width;
+            int refH = cam != null ? Math.Max(1, cam.pixelHeight) : Screen.height;
+            if (refW < 1 || refH < 1)
+            {
+                return Error("参考分辨率无效，无法将 UI 矩形映射到截图");
+            }
+
+            int x0 = Mathf.FloorToInt(minX * tex.width / refW);
+            int x1 = Mathf.CeilToInt(maxX * tex.width / refW);
+            int y0 = Mathf.FloorToInt(minY * tex.height / refH);
+            int y1 = Mathf.CeilToInt(maxY * tex.height / refH);
+
+            x0 = Mathf.Clamp(x0, 0, tex.width - 1);
+            x1 = Mathf.Clamp(x1, 0, tex.width);
+            y0 = Mathf.Clamp(y0, 0, tex.height - 1);
+            y1 = Mathf.Clamp(y1, 0, tex.height);
+
+            int cropW = x1 - x0;
+            int cropH = y1 - y0;
+            if (cropW < 1 || cropH < 1)
+            {
+                return Error($"节点 '{name}' 屏幕矩形无效或与视口无交集");
+            }
+
+            var pixels = tex.GetPixels(x0, y0, cropW, cropH);
+            var cropped = new Texture2D(cropW, cropH, tex.format, false);
+            cropped.SetPixels(pixels);
+            cropped.Apply();
+            UnityEngine.Object.DestroyImmediate(tex);
+            tex = cropped;
+            return null;
+        }
+
+        private static Camera TryGetSceneViewCamera()
+        {
+            try
+            {
+                var editorAssembly = Assembly.Load("UnityEditor");
+                var sceneViewType = editorAssembly.GetType("UnityEditor.SceneView");
+                var lastActiveProperty = sceneViewType.GetProperty("lastActiveSceneView", BindingFlags.Static | BindingFlags.Public);
+                var sceneView = lastActiveProperty?.GetValue(null);
+                if (sceneView == null)
+                {
+                    return null;
+                }
+
+                var cameraProperty = sceneViewType.GetProperty("camera", BindingFlags.Instance | BindingFlags.Public);
+                return cameraProperty?.GetValue(sceneView) as Camera;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Texture2D ScaleTextureDown(Texture2D src, int maxWidth, int maxHeight)
+        {
+            if (src == null)
+            {
+                return null;
+            }
+
+            if (src.width <= maxWidth && src.height <= maxHeight)
+            {
+                return src;
+            }
+
+            float scale = Mathf.Min((float)maxWidth / src.width, (float)maxHeight / src.height);
+            int nw = Mathf.Max(1, Mathf.RoundToInt(src.width * scale));
+            int nh = Mathf.Max(1, Mathf.RoundToInt(src.height * scale));
+
+            var rt = new RenderTexture(nw, nh, 0);
+            var prev = RenderTexture.active;
+            Graphics.Blit(src, rt);
+            RenderTexture.active = rt;
+            var scaled = new Texture2D(nw, nh, TextureFormat.RGB24, false);
+            scaled.ReadPixels(new Rect(0, 0, nw, nh), 0, 0);
+            scaled.Apply();
+            RenderTexture.active = prev;
+            UnityEngine.Object.DestroyImmediate(rt);
+            UnityEngine.Object.DestroyImmediate(src);
+            return scaled;
         }
 
         private static string BuildImageResponse(byte[] bytes, string source)

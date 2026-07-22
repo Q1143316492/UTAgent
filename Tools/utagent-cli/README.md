@@ -43,7 +43,7 @@ CLI 随 **UTAgent 插件**分发，路径固定为 `Assets/UTAgent/Tools/utagent
 | `log tail [-n 80]` | 最新 agent 日志末尾（`Out/logs/`） |
 | `log errors [-n 200]` | 筛 Traceback / HTTP 400 / step |
 | `scene find <name>` | 场景内同名对象计数 |
-| `screenshot [--view scene\|game]` | PNG 落盘（默认 `Out/screenshots/`），打印 path |
+| `screenshot [--view scene\|game] [--name UI名] [--padding N]` | PNG 落盘（默认 `Out/screenshots/`）；`--name` 按节点裁切 |
 | `skill list [--json]` | 领域 skill 目录（仅 frontmatter + 绝对路径；离线；对标 Chat Available Skills） |
 | `skill get <id> [--json]` | 输出 skill 全文（对标 `loadSkill`） |
 | `chat "..."` | 自然语言 ReAct（等同 Chat），默认阻塞到结束 |

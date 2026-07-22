@@ -185,3 +185,9 @@ cd Assets/UTAgent/Tools/ui-benchmark
 **星露谷 HUD**（Cursor + 命令行）— 右上状态 / 底栏热键 / 精力条：
 
 ![WndStardewHud](Docs/examples/wndstardewhud-cursor-exec-early.png)
+
+**中英 TMP 字体**（Cursor + 多次 `exec`）— 生成 Dynamic SDF、场景拼一句混排、截图验收：
+
+→ [Docs/examples/lxgw-tmp-font-exec.md](Docs/examples/lxgw-tmp-font-exec.md)
+
+![LXGW TMP smoke](Docs/examples/lxgw-tmp-font-smoke.png)

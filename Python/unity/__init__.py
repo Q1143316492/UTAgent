@@ -44,7 +44,7 @@ from .scene_view import (
 )
 
 # ---- screenshot ----
-from .screenshot import capture_scene_view, capture_screenshot
+from .screenshot import capture, capture_scene_view, capture_screenshot
 
 # ---- inspect ----
 from .inspect import (
@@ -76,6 +76,7 @@ __all__ = [
     "get_scene_view_state",
     "set_scene_view_camera",
     # screenshot
+    "capture",
     "capture_screenshot",
     "capture_scene_view",
     # inspect

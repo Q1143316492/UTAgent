@@ -1,10 +1,9 @@
-"""unity.screenshot — 截图（Game 视图 / Scene 视图）。
+"""unity.screenshot — 截图（唯一推荐入口 ``capture``）。
 
-两条路径：
-- 默认：返回 ``__image`` base64，供 Agent 多模态（DeepSeek 等纯文本会在
-  ``process_pending_images`` 剥离，不送入 LLM）。
-- ``save_to_file=True``：PNG 落盘并返回 ``path``（不含 base64），供 Cursor /
-  能看图的模型用 Read 工具目检。
+- 默认返回 ``__image`` base64，供 Agent 多模态。
+- ``save_to_file=True``：PNG 落盘并返回 ``path``（不含 base64），供 Cursor Read。
+
+兼容：``capture_screenshot`` / ``capture_scene_view`` 转发 ``capture(view=...)``。
 """
 
 from __future__ import annotations
@@ -57,27 +56,56 @@ def _write_png_from_result(result: dict, path: str | None) -> dict:
     }
 
 
-def capture_screenshot(max_width=512, max_height=512, save_to_file=False, path=None):
-    """截取 Unity Game 视图（Play 失败则回退 Scene）。
+def capture(
+    view="scene",
+    max_width=512,
+    max_height=512,
+    save_to_file=False,
+    path=None,
+    name=None,
+    padding=0,
+):
+    """统一截图入口。
 
-    max_width/max_height: 64-1920/64-1080 整数，默认 512
-    save_to_file: True 时写 PNG 并返回 path（无 __image）；False 时返回 __image（Agent 用）
-    path: 可选显式输出路径；默认 Out/screenshots/shot_*.png
+    view: ``scene`` | ``game``
+    max_width / max_height: 64–1920 / 64–1080，裁切后再缩放
+    save_to_file / path: 落盘 PNG
+    name: UI 物体名；非空则按 RectTransform 屏幕/相机投影矩形裁切（Overlay / Screen Space Camera / World Space）
+    padding: 裁切外扩像素（>=0）
     """
-    _validate_dims(max_width, max_height, "capture_screenshot")
-    result = json.loads(_bridge().CaptureScreenshot(max_width, max_height))
+    _validate_dims(max_width, max_height, "capture")
+    view_key = (view or "scene").strip().lower()
+    if view_key not in ("scene", "game"):
+        raise ValueError("capture: view 须为 'scene' 或 'game'")
+    if not isinstance(padding, int) or padding < 0:
+        raise ValueError("capture: padding 须为非负整数")
+
+    name_arg = "" if name is None else str(name)
+    result = json.loads(
+        _bridge().Capture(view_key, max_width, max_height, name_arg, padding)
+    )
     if save_to_file or path:
         return _write_png_from_result(result, path)
     return result
+
+
+def capture_screenshot(max_width=512, max_height=512, save_to_file=False, path=None):
+    """兼容包装 → ``capture(view=\"game\", ...)``。"""
+    return capture(
+        view="game",
+        max_width=max_width,
+        max_height=max_height,
+        save_to_file=save_to_file,
+        path=path,
+    )
 
 
 def capture_scene_view(max_width=512, max_height=512, save_to_file=False, path=None):
-    """截取 Unity Scene 视图（Editor）。
-
-    参数同 capture_screenshot。
-    """
-    _validate_dims(max_width, max_height, "capture_scene_view")
-    result = json.loads(_bridge().CaptureSceneViewScreenshot(max_width, max_height))
-    if save_to_file or path:
-        return _write_png_from_result(result, path)
-    return result
+    """兼容包装 → ``capture(view=\"scene\", ...)``。"""
+    return capture(
+        view="scene",
+        max_width=max_width,
+        max_height=max_height,
+        save_to_file=save_to_file,
+        path=path,
+    )
