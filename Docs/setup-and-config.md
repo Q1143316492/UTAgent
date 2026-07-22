@@ -26,7 +26,7 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 | Tab | 内容 |
 |-----|------|
 | 大模型 | Provider / Model、Max Steps、API Key 环境变量名 |
-| Python | 状态 +「下载并初始化」；路径/重置在「高级」 |
+| Python | 状态 +「下载并初始化」；可选「域重载前关闭 Python（轻量，默认关）」；路径/重置在「高级」 |
 | CLI | Remote CLI 启用与端口（默认开启） |
 | 运行产物 | 目录（默认 `Assets/UTAgent/Out/`；子目录 `logs/` / `screenshots/` / `sessions/` / `exec/`） |
 

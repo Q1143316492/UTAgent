@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Python.Runtime;
 using UnityEditor;
 using UnityEngine;
+using UTAgent.Editor.Config;
 using UTAgent.Editor.PythonInterop;
 
 namespace UTAgent.Editor.Core
@@ -31,6 +33,55 @@ namespace UTAgent.Editor.Core
         static UTAgentBootstrap()
         {
             mInvalidated = mEngine != null && mEngine.IsAvailable;
+            AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
+        }
+
+        /// <summary>
+        /// 域重载前按配置轻量关闭引擎（默认关）。开启时走 Finalize 快路径，非全量 Shutdown。
+        /// </summary>
+        private static void OnBeforeAssemblyReload()
+        {
+            try
+            {
+                UTAgentConfig.EnsureLoaded();
+                if (!UTAgentConfig.Current.python.shutdownBeforeDomainReload)
+                {
+                    return;
+                }
+
+                bool needShutdown = IsAvailable;
+                if (!needShutdown)
+                {
+                    try
+                    {
+                        needShutdown = PythonEngine.IsInitialized;
+                    }
+                    catch
+                    {
+                        needShutdown = false;
+                    }
+                }
+
+                if (!needShutdown)
+                {
+                    return;
+                }
+
+                // 轻量路径：勿调全量 Shutdown（多轮 GC 可把 Reload 拖到十余秒）
+                IPythonEngine engine = GetEngine();
+                if (engine is CPythonEngine cpython)
+                {
+                    cpython.ShutdownForDomainReload();
+                }
+                else
+                {
+                    Shutdown(reloadApp: false);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[UTAgent] 域重载前关闭引擎失败：{e.Message}");
+            }
         }
 
         private static IPythonEngine GetEngine()

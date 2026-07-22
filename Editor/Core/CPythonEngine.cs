@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using Python.Runtime;
 using UnityEngine;
@@ -107,6 +108,18 @@ namespace UTAgent.Editor.Core
             }
         }
 
+        /// <summary>
+        /// 域重载前轻量拆除：跳过 pythonnet 全量 Shutdown 的多轮 GC/Stash。
+        /// 托管域即将销毁，只求 Finalize 原生解释器并清旗标，避免随后 DomainUnload 再走重 Shutdown。
+        /// </summary>
+        public void ShutdownForDomainReload()
+        {
+            lock (mLock)
+            {
+                ShutdownForDomainReloadLocked();
+            }
+        }
+
         private void ShutdownLocked()
         {
             if (!mInitialized && !PythonEngine.IsInitialized)
@@ -129,6 +142,118 @@ namespace UTAgent.Editor.Core
             {
                 mInitialized = false;
                 mInvalidated = false;
+            }
+        }
+
+        private void ShutdownForDomainReloadLocked()
+        {
+            if (!mInitialized && !PythonEngine.IsInitialized)
+            {
+                return;
+            }
+
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                // 跳过 Stash / 多轮 GC；随后 DomainUnload→Shutdown 见 initialized==false 直接返回
+                TrySetRuntimeProcessIsTerminating(true);
+
+                if (PythonEngine.IsInitialized || TryIsRuntimeInitialized())
+                {
+                    TryPyFinalize();
+                }
+
+                TrySetPythonEngineInitialized(false);
+                TrySetRuntimeInitialized(false);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[UTAgent] 域重载轻量关闭异常：{e.Message}");
+            }
+            finally
+            {
+                mInitialized = false;
+                mInvalidated = false;
+                sw.Stop();
+                Debug.Log($"[UTAgent] 域重载前轻量关闭完成，耗时 {sw.ElapsedMilliseconds} ms");
+            }
+        }
+
+        private static void TrySetRuntimeProcessIsTerminating(bool value)
+        {
+            FieldInfo field = typeof(Runtime).GetField(
+                "ProcessIsTerminating",
+                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null && field.FieldType == typeof(bool))
+            {
+                field.SetValue(null, value);
+            }
+        }
+
+        private static bool TryIsRuntimeInitialized()
+        {
+            FieldInfo field = typeof(Runtime).GetField(
+                "_isInitialized",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (field == null || field.FieldType != typeof(bool))
+            {
+                return false;
+            }
+
+            return (bool)field.GetValue(null);
+        }
+
+        private static void TrySetRuntimeInitialized(bool value)
+        {
+            FieldInfo field = typeof(Runtime).GetField(
+                "_isInitialized",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (field != null && field.FieldType == typeof(bool))
+            {
+                field.SetValue(null, value);
+            }
+        }
+
+        private static void TrySetPythonEngineInitialized(bool value)
+        {
+            FieldInfo field = typeof(PythonEngine).GetField(
+                "initialized",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (field != null && field.FieldType == typeof(bool))
+            {
+                field.SetValue(null, value);
+            }
+        }
+
+        private static void TryPyFinalize()
+        {
+            MethodInfo finalize = typeof(Runtime).GetMethod(
+                "Py_Finalize",
+                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            if (finalize == null)
+            {
+                Debug.LogWarning("[UTAgent] 未找到 Runtime.Py_Finalize，跳过原生 Finalize");
+                return;
+            }
+
+            try
+            {
+                using (Py.GIL())
+                {
+                    finalize.Invoke(null, null);
+                }
+            }
+            catch (Exception e)
+            {
+                try
+                {
+                    finalize.Invoke(null, null);
+                }
+                catch (Exception inner)
+                {
+                    Debug.LogWarning(
+                        $"[UTAgent] Py_Finalize 失败：{e.Message}; retry={inner.Message}");
+                }
             }
         }
 

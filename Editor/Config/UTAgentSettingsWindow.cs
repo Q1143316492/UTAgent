@@ -36,6 +36,7 @@ namespace UTAgent.Editor.Config
         private bool mBridgeEnabled = true;
         private int mBridgePort = UTAgentConfig.DefaultBridgePort;
         private string mLogDirectory = "";
+        private bool mShutdownBeforeDomainReload;
 
         private string mFeedback = "";
         private MessageType mFeedbackType = MessageType.Info;
@@ -134,6 +135,27 @@ namespace UTAgent.Editor.Config
             {
                 BootstrapAndInitializePython();
             }
+
+            EditorGUILayout.Space(4);
+            EditorGUI.BeginChangeCheck();
+            mShutdownBeforeDomainReload = EditorGUILayout.ToggleLeft(
+                "域重载前关闭 Python（轻量，默认关）",
+                mShutdownBeforeDomainReload);
+            if (EditorGUI.EndChangeCheck())
+            {
+                UTAgentConfig.Current.python.shutdownBeforeDomainReload = mShutdownBeforeDomainReload;
+                UTAgentConfig.SaveLocal();
+                ShowFeedback(
+                    mShutdownBeforeDomainReload
+                        ? "已开启：编译前轻量 Finalize（减轻锁死；可能略增 Reload 耗时）。"
+                        : "已关闭：Reload 更快；若再出现 PythonDLL 锁死需重启 Editor。",
+                    MessageType.Info,
+                    5);
+            }
+
+            EditorGUILayout.LabelField(
+                "默认关闭以免拖慢编译。仅在频繁遇到引擎锁死时再勾选。",
+                EditorStyles.wordWrappedMiniLabel);
 
             mFoldPythonAdvanced = EditorGUILayout.Foldout(mFoldPythonAdvanced, "高级", true);
             if (mFoldPythonAdvanced)
@@ -425,6 +447,7 @@ namespace UTAgent.Editor.Config
             mBaseUrlOverride = config.llm.baseUrlOverride ?? "";
             mBridgeEnabled = config.bridge.enabled;
             mBridgePort = config.bridge.port;
+            mShutdownBeforeDomainReload = config.python.shutdownBeforeDomainReload;
             mLogDirectory = string.IsNullOrWhiteSpace(config.log.directory)
                 ? UTAgentSessionLogger.GetDefaultLogDirectory()
                 : config.log.directory;
