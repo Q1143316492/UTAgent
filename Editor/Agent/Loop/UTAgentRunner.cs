@@ -675,6 +675,62 @@ namespace UTAgent.Editor.Agent
                     }
                     continue;
                 }
+                if (call.Name == "execCsharp")
+                {
+                    if (!CsharpExec.CsharpEmitExec.Enabled)
+                    {
+                        string disabled =
+                            "{\"success\":false,\"error\":\"[csharp-emit:disabled] CsharpEmitExec.Enabled=false\"}";
+                        try
+                        {
+                            SafeExec(ModuleImport +
+                                $"agent.append_tool_result({EscapePy(call.Id)}, {EscapePy(disabled)})\n");
+                        }
+                        catch (Exception e)
+                        {
+                            FinishTurn(turn, $"append_tool_result 失败：{e.Message}", true);
+                            return;
+                        }
+
+                        continue;
+                    }
+
+                    string csCode = ExtractString(call.Arguments, "code");
+                    if (string.IsNullOrEmpty(csCode))
+                    {
+                        Debug.LogWarning("[UTAgentRunner] execCsharp 缺少 code 参数");
+                        continue;
+                    }
+
+                    PushProgress(turn, "tool_call", csCode);
+                    PushProgress(turn, "status", $"执行 execCsharp（尖刺，第 {turn.StepCount} 步）…");
+                    var (csOutput, csError) = CsharpExec.CsharpEmitExec.Run(csCode);
+                    bool csOk = string.IsNullOrEmpty(csError);
+                    string csResultContent = csOk
+                        ? $"{{\"success\":true,\"stdout\":{JsonStr(csOutput)},\"result\":{JsonStr(csOutput)}}}"
+                        : $"{{\"success\":false,\"stderr\":{JsonStr(csError)},\"error\":{JsonStr(csError)}}}";
+                    string csPreview = csResultContent.Length > 200
+                        ? csResultContent.Substring(0, 200) + "..."
+                        : csResultContent;
+                    if (!string.IsNullOrEmpty(csPreview))
+                    {
+                        PushProgress(turn, "observation", csPreview);
+                    }
+
+                    turn.Logger?.LogToolResult(call.Id, "[execCsharp]\n" + csCode, csResultContent, csPreview);
+                    try
+                    {
+                        SafeExec(ModuleImport +
+                            $"agent.append_tool_result({EscapePy(call.Id)}, {EscapePy(csResultContent)})\n");
+                    }
+                    catch (Exception e)
+                    {
+                        FinishTurn(turn, $"append_tool_result 失败：{e.Message}", true);
+                        return;
+                    }
+
+                    continue;
+                }
                 if (call.Name != "execPython")
                 {
                     Debug.LogWarning($"[UTAgentRunner] 未知 tool：{call.Name}，跳过");

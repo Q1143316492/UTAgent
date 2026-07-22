@@ -35,6 +35,18 @@ namespace UTAgent.Editor.Agent
             sb.Append("\"timeout\":{\"type\":\"number\",\"description\":\"秒，默认 30\"}");
             sb.Append("},\"required\":[\"code\"]}}},");
 
+            if (CsharpExec.CsharpEmitExec.Enabled)
+            {
+                sb.Append("{\"type\":\"function\",\"function\":{");
+                sb.Append("\"name\":\"execCsharp\",");
+                sb.Append("\"description\":").Append(JsonStr(
+                    "【实验/尖刺】在 Unity Editor 内 Emit+Load 执行 C#。code 须为可编译单元，含 public static class Dyn { public static string Run() { ... } }。" +
+                    "勿用于日常任务（日常请用 execPython）。不触发 Domain Reload。")).Append(",");
+                sb.Append("\"parameters\":{\"type\":\"object\",\"properties\":{");
+                sb.Append("\"code\":{\"type\":\"string\",\"description\":\"完整 C# 源码（含 Dyn.Run 入口）\"}");
+                sb.Append("},\"required\":[\"code\"]}}},");
+            }
+
             sb.Append("{\"type\":\"function\",\"function\":{");
             sb.Append("\"name\":\"loadSkill\",");
             sb.Append("\"description\":").Append(JsonStr(loadSkillDesc)).Append(",");
