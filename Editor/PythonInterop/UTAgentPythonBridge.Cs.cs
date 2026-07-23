@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using UTAgent.Editor.Config;
+using UTAgent.Editor.Core;
 
 namespace UTAgent.Editor.PythonInterop
 {
@@ -69,6 +71,8 @@ namespace UTAgent.Editor.PythonInterop
         /// </summary>
         public string CsGetPreloadAssemblies()
         {
+            var sw = Stopwatch.StartNew();
+            int domainAssemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
             var names = new HashSet<string>(StringComparer.Ordinal)
             {
                 "UnityEngine.CoreModule",
@@ -110,6 +114,11 @@ namespace UTAgent.Editor.PythonInterop
                 }
             }
 
+            sw.Stop();
+            UTAgentInitTiming.Log(
+                "cs_get_preload_assemblies",
+                sw.ElapsedMilliseconds,
+                $"domain_assemblies={domainAssemblyCount} preload_count={names.Count}");
             var sorted = names.OrderBy(n => n).Select(BridgeJson.EscapeJson);
             return $"[{string.Join(",", sorted)}]";
         }

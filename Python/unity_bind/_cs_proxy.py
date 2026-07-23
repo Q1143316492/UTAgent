@@ -11,8 +11,10 @@ def ensure_clr():
     global _CLR_READY
     if _CLR_READY:
         return
+    import time
     import clr
 
+    t0 = time.perf_counter()
     bridge = _cs_bridge()
     assemblies = None
     if hasattr(bridge, "CsGetPreloadAssemblies"):
@@ -35,6 +37,8 @@ def ensure_clr():
         except Exception:
             pass
     _CLR_READY = True
+    ms = int((time.perf_counter() - t0) * 1000)
+    print(f"[UTAgent][InitTiming] ensure_clr ms={ms} assemblies={len(assemblies)}")
 
 
 def _cs_bridge():

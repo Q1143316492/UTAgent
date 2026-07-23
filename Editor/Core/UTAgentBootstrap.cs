@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using UTAgent.Editor.PythonInterop;
+using Debug = UnityEngine.Debug;
 
 namespace UTAgent.Editor.Core
 {
@@ -48,6 +50,7 @@ namespace UTAgent.Editor.Core
         /// </summary>
         public static void Initialize()
         {
+            var sw = Stopwatch.StartNew();
             var engine = GetEngine();
             AddPythonPath();
             engine.Initialize();
@@ -55,6 +58,8 @@ namespace UTAgent.Editor.Core
 
             EnsureUnityModulePath(engine);
             RefreshPythonModuleCache(force: true);
+            sw.Stop();
+            UTAgentInitTiming.Log("bootstrap_total", sw.ElapsedMilliseconds);
         }
 
         /// <summary>
@@ -74,10 +79,16 @@ namespace UTAgent.Editor.Core
             {
                 // 勿在 import App 前 purge：会导致 unity.* 半初始化循环 import。
                 string forceLit = force ? "True" : "False";
+                var swSync = Stopwatch.StartNew();
                 var (output, _) = engine.Exec(
                     "from unity.core.app import App\n" +
                     $"_purged = App.sync_runtime_modules(force={forceLit})\n" +
                     "print('purged=' + str(_purged))\n");
+                swSync.Stop();
+                UTAgentInitTiming.Log(
+                    "sync_runtime_modules",
+                    swSync.ElapsedMilliseconds,
+                    $"force={force}");
                 purged = output != null && output.Contains("purged=True");
             }
             catch (Exception e)
@@ -97,17 +108,21 @@ namespace UTAgent.Editor.Core
 
         private static void RegisterBridgeModules(IPythonEngine engine)
         {
+            var sw = Stopwatch.StartNew();
             var bridge = UTAgentPythonBridge.Instance;
             bridge.CsClearResolveCache();
             engine.RegisterModule("_unity_bridge", bridge);
             engine.RegisterModule("_ui_bridge", bridge);
             engine.RegisterModule("_wndmgr_bridge", bridge);
             engine.RegisterModule("_cs_bridge", bridge);
+            sw.Stop();
+            UTAgentInitTiming.Log("register_bridges", sw.ElapsedMilliseconds);
         }
 
         private static void EnsureUnityModulePath(IPythonEngine engine)
         {
             var entries = PythonPathConfig.BuildSysPathEntries();
+            var sw = Stopwatch.StartNew();
             try
             {
                 var agentDir = entries[0];
@@ -123,10 +138,14 @@ namespace UTAgent.Editor.Core
                     "        sys.path.remove(_p)\n" +
                     "sys.path.insert(0, _python)\n" +
                     "sys.path.insert(0, _agent)\n");
+                sw.Stop();
+                UTAgentInitTiming.Log("ensure_sys_path", sw.ElapsedMilliseconds);
                 Debug.Log($"[UTAgent] 已注入模块路径（agent 优先）：{agentDir}; {pythonDir}");
             }
             catch (Exception e)
             {
+                sw.Stop();
+                UTAgentInitTiming.Log("ensure_sys_path", sw.ElapsedMilliseconds, "failed=True");
                 Debug.LogWarning($"[UTAgent] 注入模块路径失败：{e.Message}");
             }
         }

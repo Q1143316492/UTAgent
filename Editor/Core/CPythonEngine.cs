@@ -65,7 +65,7 @@ namespace UTAgent.Editor.Core
                     if (DllPathsEqual(currentDll, targetDll) || string.IsNullOrWhiteSpace(currentDll))
                     {
                         AttachToRunningRuntime(pythonHome);
-                        EnsureProbeOrThrow("附着后探活失败");
+                        TimedProbeOrThrow("附着后探活失败");
                     }
                     else
                     {
@@ -81,12 +81,14 @@ namespace UTAgent.Editor.Core
                 }
 
                 sw.Stop();
+                UTAgentInitTiming.Log("engine_total", sw.ElapsedMilliseconds);
                 Debug.Log($"[UTAgent] 初始化完成，耗时 {sw.ElapsedMilliseconds} ms");
             }
             catch (Exception e)
             {
                 ClearAfterFailedInit();
                 sw.Stop();
+                UTAgentInitTiming.Log("engine_total", sw.ElapsedMilliseconds, "failed=True");
                 Debug.LogError($"[UTAgent] 初始化失败（{sw.ElapsedMilliseconds} ms）：{e}");
                 throw;
             }
@@ -135,20 +137,39 @@ namespace UTAgent.Editor.Core
         {
             ApplyEnvironmentVariables(pythonHome);
             EnsurePythonDll(targetDll);
-            if (TryIsNativeInterpreterInitialized())
+            bool softReattach = TryIsNativeInterpreterInitialized();
+            if (softReattach)
             {
                 Debug.Log("[UTAgent] 原生解释器仍存活，ColdStart 将附着（Soft-reattach）");
             }
 
+            int assemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+            UTAgentInitTiming.LogInfo(
+                "assembly_count",
+                $"count={assemblyCount} soft_reattach={softReattach}");
+
             if (!PythonEngine.IsInitialized)
             {
+                var swInit = Stopwatch.StartNew();
                 PythonEngine.Initialize();
+                swInit.Stop();
+                UTAgentInitTiming.Log(
+                    "python_engine_initialize",
+                    swInit.ElapsedMilliseconds,
+                    $"assemblies={assemblyCount} soft_reattach={softReattach}");
+            }
+            else
+            {
+                UTAgentInitTiming.Log(
+                    "python_engine_initialize",
+                    0,
+                    $"skipped=True assemblies={assemblyCount} soft_reattach={softReattach}");
             }
 
-            RegisterBridgeModule();
+            TimedRegisterBridgeModule();
             mInitialized = true;
             mInvalidated = false;
-            EnsureProbeOrThrow("Soft-reattach 后探活失败");
+            TimedProbeOrThrow("Soft-reattach 后探活失败");
         }
 
         private void AttachToRunningRuntime(string pythonHome)
@@ -156,14 +177,30 @@ namespace UTAgent.Editor.Core
             ApplyEnvironmentVariables(pythonHome);
             Debug.Log($"[UTAgent] 附着已运行 Runtime（跳过 PythonDLL 赋值），PYTHONHOME={pythonHome}");
             Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
-            RegisterBridgeModule();
+            int assemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+            UTAgentInitTiming.LogInfo(
+                "assembly_count",
+                $"count={assemblyCount} soft_reattach=True path=attach");
+            TimedRegisterBridgeModule();
             mInitialized = true;
             mInvalidated = false;
         }
 
-        private void EnsureProbeOrThrow(string failurePrefix)
+        private static void TimedRegisterBridgeModule()
         {
-            if (TryProbeLocked())
+            var sw = Stopwatch.StartNew();
+            RegisterBridgeModule();
+            sw.Stop();
+            UTAgentInitTiming.Log("register_pybridge", sw.ElapsedMilliseconds);
+        }
+
+        private void TimedProbeOrThrow(string failurePrefix)
+        {
+            var sw = Stopwatch.StartNew();
+            bool ok = TryProbeLocked();
+            sw.Stop();
+            UTAgentInitTiming.Log("probe", sw.ElapsedMilliseconds, $"ok={ok}");
+            if (ok)
             {
                 return;
             }
