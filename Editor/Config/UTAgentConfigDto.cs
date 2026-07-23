@@ -61,11 +61,6 @@ namespace UTAgent.Editor.Config
     {
         public string home = "";
         public string dll = "python312.dll";
-        /// <summary>
-        /// 脚本域重载前是否轻量关闭嵌入式引擎。默认 false（避免拖慢 Reload）；
-        /// 开启后走 Finalize 快路径，非全量 Shutdown。JsonUtility 缺字段时靠 Merge 保默认。
-        /// </summary>
-        public bool shutdownBeforeDomainReload;
     }
 
     [Serializable]

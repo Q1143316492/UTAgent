@@ -219,12 +219,12 @@ namespace UTAgent.Editor.Config
         }
 
         /// <summary>
-        /// 按异常类型拼用户可读详情；PythonDLL 锁死类明确要求重启 Editor。
+        /// 按异常类型拼用户可读详情；Soft-reattach / PythonDLL 锁死类明确要求重启 Editor。
         /// </summary>
         public static string FormatInitFailureDetail(Exception e)
         {
             string message = e?.Message ?? "未知错误";
-            if (IsPythonDllLockFailure(e))
+            if (IsRestartRequiredInitFailure(e))
             {
                 return message + "\n" + RestartEditorHint;
             }
@@ -232,14 +232,17 @@ namespace UTAgent.Editor.Config
             return message + "\n" + DomainReloadHint;
         }
 
-        private static bool IsPythonDllLockFailure(Exception e)
+        private static bool IsRestartRequiredInitFailure(Exception e)
         {
             for (Exception cur = e; cur != null; cur = cur.InnerException)
             {
                 string msg = cur.Message ?? "";
                 if (msg.IndexOf("PythonDLL", StringComparison.OrdinalIgnoreCase) >= 0
                     || msg.IndexOf("must be set before runtime is initialized", StringComparison.OrdinalIgnoreCase) >= 0
-                    || msg.IndexOf("Runtime 已锁定", StringComparison.OrdinalIgnoreCase) >= 0)
+                    || msg.IndexOf("Runtime 已锁定", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("探活失败", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("Soft-reattach", StringComparison.OrdinalIgnoreCase) >= 0
+                    || msg.IndexOf("请重启 Unity Editor", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     return true;
                 }

@@ -35,7 +35,7 @@ namespace UTAgent.Editor.Core
 
         /// <summary>
         /// 初始化 CPython 引擎。重复调用安全。
-        /// 若 pythonnet 已初始化且 dll 未变：附着（不写 Runtime.PythonDLL）并重注册桥。
+        /// Soft-reattach：域重载后原生解释器可仍存活；附着并重注册桥，失败只清旗标并要求重启 Editor（不自动 Shutdown 重试）。
         /// </summary>
         public void Initialize()
         {
@@ -65,23 +65,19 @@ namespace UTAgent.Editor.Core
                     if (DllPathsEqual(currentDll, targetDll) || string.IsNullOrWhiteSpace(currentDll))
                     {
                         AttachToRunningRuntime(pythonHome);
-                        if (!TryProbeLocked())
-                        {
-                            Debug.LogWarning("[UTAgent] 附着后探活失败，尝试 Shutdown 后冷启动");
-                            ShutdownLocked();
-                            ColdStart(pythonHome, targetDll);
-                        }
+                        EnsureProbeOrThrow("附着后探活失败");
                     }
                     else
                     {
+                        // 换 dll：显式配置变更，允许全量 Shutdown（非 Reload 兜底）
                         Debug.Log($"[UTAgent] dll 变更，Shutdown 后冷启动：{currentDll} → {targetDll}");
                         ShutdownLocked();
-                        ColdStart(pythonHome, targetDll);
+                        SoftReattachColdStart(pythonHome, targetDll);
                     }
                 }
                 else
                 {
-                    ColdStart(pythonHome, targetDll);
+                    SoftReattachColdStart(pythonHome, targetDll);
                 }
 
                 sw.Stop();
@@ -89,8 +85,7 @@ namespace UTAgent.Editor.Core
             }
             catch (Exception e)
             {
-                mInitialized = false;
-                mInvalidated = false;
+                ClearAfterFailedInit();
                 sw.Stop();
                 Debug.LogError($"[UTAgent] 初始化失败（{sw.ElapsedMilliseconds} ms）：{e}");
                 throw;
@@ -98,25 +93,13 @@ namespace UTAgent.Editor.Core
         }
 
         /// <summary>
-        /// 关闭引擎（重操作，会卡主线程数秒）。仅手动调用；退出 Play 不自动 Shutdown。
+        /// 关闭引擎（重操作，会卡主线程数秒）。仅手动调用（如 Settings 重置）；退出 Play / 域重载不自动 Shutdown。
         /// </summary>
         public void Shutdown()
         {
             lock (mLock)
             {
                 ShutdownLocked();
-            }
-        }
-
-        /// <summary>
-        /// 域重载前轻量拆除：跳过 pythonnet 全量 Shutdown 的多轮 GC/Stash。
-        /// 托管域即将销毁，只求 Finalize 原生解释器并清旗标，避免随后 DomainUnload 再走重 Shutdown。
-        /// </summary>
-        public void ShutdownForDomainReload()
-        {
-            lock (mLock)
-            {
-                ShutdownForDomainReloadLocked();
             }
         }
 
@@ -145,62 +128,101 @@ namespace UTAgent.Editor.Core
             }
         }
 
-        private void ShutdownForDomainReloadLocked()
+        /// <summary>
+        /// 托管未标记已 init 时的 ColdStart：原生仍存活则由 pythonnet 内部附着（Soft-reattach）。
+        /// </summary>
+        private void SoftReattachColdStart(string pythonHome, string targetDll)
         {
-            if (!mInitialized && !PythonEngine.IsInitialized)
+            ApplyEnvironmentVariables(pythonHome);
+            EnsurePythonDll(targetDll);
+            if (TryIsNativeInterpreterInitialized())
+            {
+                Debug.Log("[UTAgent] 原生解释器仍存活，ColdStart 将附着（Soft-reattach）");
+            }
+
+            if (!PythonEngine.IsInitialized)
+            {
+                PythonEngine.Initialize();
+            }
+
+            RegisterBridgeModule();
+            mInitialized = true;
+            mInvalidated = false;
+            EnsureProbeOrThrow("Soft-reattach 后探活失败");
+        }
+
+        private void AttachToRunningRuntime(string pythonHome)
+        {
+            ApplyEnvironmentVariables(pythonHome);
+            Debug.Log($"[UTAgent] 附着已运行 Runtime（跳过 PythonDLL 赋值），PYTHONHOME={pythonHome}");
+            Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
+            RegisterBridgeModule();
+            mInitialized = true;
+            mInvalidated = false;
+        }
+
+        private void EnsureProbeOrThrow(string failurePrefix)
+        {
+            if (TryProbeLocked())
             {
                 return;
             }
 
-            var sw = Stopwatch.StartNew();
+            throw new InvalidOperationException(
+                $"[UTAgent] {failurePrefix}。请重启 Unity Editor 后再初始化。");
+        }
+
+        /// <summary>
+        /// 探活；失败时清 UTAgent 可用标志并返回 false（调用方抛重启提示，不 Shutdown 重试）。
+        /// </summary>
+        private bool TryProbeLocked()
+        {
             try
             {
-                // 跳过 Stash / 多轮 GC；随后 DomainUnload→Shutdown 见 initialized==false 直接返回
-                TrySetRuntimeProcessIsTerminating(true);
-
-                if (PythonEngine.IsInitialized || TryIsRuntimeInitialized())
+                using (Py.GIL())
                 {
-                    TryPyFinalize();
+                    using var scope = Py.CreateScope();
+                    scope.Exec("1+1", scope.Variables());
                 }
 
-                TrySetPythonEngineInitialized(false);
-                TrySetRuntimeInitialized(false);
+                return true;
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[UTAgent] 域重载轻量关闭异常：{e.Message}");
-            }
-            finally
-            {
+                Debug.LogWarning($"[UTAgent] 探活失败：{e.Message}");
                 mInitialized = false;
                 mInvalidated = false;
-                sw.Stop();
-                Debug.Log($"[UTAgent] 域重载前轻量关闭完成，耗时 {sw.ElapsedMilliseconds} ms");
+                return false;
             }
         }
 
-        private static void TrySetRuntimeProcessIsTerminating(bool value)
+        private void ClearAfterFailedInit()
         {
-            FieldInfo field = typeof(Runtime).GetField(
-                "ProcessIsTerminating",
-                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            if (field != null && field.FieldType == typeof(bool))
+            mInitialized = false;
+            mInvalidated = false;
+            TrySetPythonEngineInitialized(false);
+            TrySetRuntimeInitialized(false);
+        }
+
+        private static bool TryIsNativeInterpreterInitialized()
+        {
+            try
             {
-                field.SetValue(null, value);
-            }
-        }
+                MethodInfo method = typeof(Runtime).GetMethod(
+                    "Py_IsInitialized",
+                    BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                if (method == null)
+                {
+                    return false;
+                }
 
-        private static bool TryIsRuntimeInitialized()
-        {
-            FieldInfo field = typeof(Runtime).GetField(
-                "_isInitialized",
-                BindingFlags.Static | BindingFlags.NonPublic);
-            if (field == null || field.FieldType != typeof(bool))
+                object result = method.Invoke(null, null);
+                return result is int flag && flag != 0;
+            }
+            catch
             {
                 return false;
             }
-
-            return (bool)field.GetValue(null);
         }
 
         private static void TrySetRuntimeInitialized(bool value)
@@ -222,38 +244,6 @@ namespace UTAgent.Editor.Core
             if (field != null && field.FieldType == typeof(bool))
             {
                 field.SetValue(null, value);
-            }
-        }
-
-        private static void TryPyFinalize()
-        {
-            MethodInfo finalize = typeof(Runtime).GetMethod(
-                "Py_Finalize",
-                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
-            if (finalize == null)
-            {
-                Debug.LogWarning("[UTAgent] 未找到 Runtime.Py_Finalize，跳过原生 Finalize");
-                return;
-            }
-
-            try
-            {
-                using (Py.GIL())
-                {
-                    finalize.Invoke(null, null);
-                }
-            }
-            catch (Exception e)
-            {
-                try
-                {
-                    finalize.Invoke(null, null);
-                }
-                catch (Exception inner)
-                {
-                    Debug.LogWarning(
-                        $"[UTAgent] Py_Finalize 失败：{e.Message}; retry={inner.Message}");
-                }
             }
         }
 
@@ -347,54 +337,6 @@ namespace UTAgent.Editor.Core
             }
         }
 
-        private void AttachToRunningRuntime(string pythonHome)
-        {
-            ApplyEnvironmentVariables(pythonHome);
-            Debug.Log($"[UTAgent] 附着已运行 Runtime（跳过 PythonDLL 赋值），PYTHONHOME={pythonHome}");
-            Debug.Log($"[UTAgent] PythonDLL={Runtime.PythonDLL}");
-            RegisterBridgeModule();
-            mInitialized = true;
-            mInvalidated = false;
-        }
-
-        private void ColdStart(string pythonHome, string targetDll)
-        {
-            ApplyEnvironmentVariables(pythonHome);
-            EnsurePythonDll(targetDll);
-            if (!PythonEngine.IsInitialized)
-            {
-                PythonEngine.Initialize();
-            }
-
-            RegisterBridgeModule();
-            mInitialized = true;
-            mInvalidated = false;
-        }
-
-        /// <summary>
-        /// 附着后探活；失败返回 false（调用方决定 Shutdown→冷启动）。
-        /// </summary>
-        private bool TryProbeLocked()
-        {
-            try
-            {
-                using (Py.GIL())
-                {
-                    using var scope = Py.CreateScope();
-                    scope.Exec("1+1", scope.Variables());
-                }
-
-                return true;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[UTAgent] 探活失败：{e.Message}");
-                mInitialized = false;
-                mInvalidated = false;
-                return false;
-            }
-        }
-
         private static string ResolvePythonHomeOrThrow()
         {
             string pythonHome = PythonHomeResolver.ResolvePythonHome();
@@ -430,13 +372,13 @@ namespace UTAgent.Editor.Core
         }
 
         /// <summary>
-        /// 仅在 Runtime 未初始化时赋值 PythonDLL；已初始化时禁止写入（pythonnet 会抛错）。
+        /// 仅在 Runtime 未初始化时赋值 PythonDLL；已初始化或旗标失步时跳过写入。
         /// </summary>
         private static void EnsurePythonDll(string targetDll)
         {
-            if (PythonEngine.IsInitialized)
+            if (PythonEngine.IsInitialized || TryIsRuntimeInitialized())
             {
-                Debug.Log($"[UTAgent] Runtime 已初始化，跳过 PythonDLL 赋值（当前={Runtime.PythonDLL}）");
+                Debug.Log($"[UTAgent] Runtime 已初始化/已锁定，跳过 PythonDLL 赋值（当前={Runtime.PythonDLL}）");
                 return;
             }
 
@@ -451,6 +393,19 @@ namespace UTAgent.Editor.Core
                     "[UTAgent] 无法设置 Runtime.PythonDLL（Runtime 已锁定）。请重启 Unity Editor 后再初始化。",
                     e);
             }
+        }
+
+        private static bool TryIsRuntimeInitialized()
+        {
+            FieldInfo field = typeof(Runtime).GetField(
+                "_isInitialized",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            if (field == null || field.FieldType != typeof(bool))
+            {
+                return false;
+            }
+
+            return (bool)field.GetValue(null);
         }
 
         private static bool DllPathsEqual(string a, string b)

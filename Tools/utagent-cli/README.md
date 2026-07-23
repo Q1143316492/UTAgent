@@ -118,7 +118,7 @@ Select-String -Path Assets/UTAgent/Out/logs/exec_policy_*.log -Pattern "domain=c
 ./Assets/UTAgent/Tools/utagent-cli/utagent.ps1 ping    # engine_available: true
 ```
 
-域重载后执行 `init` 即可恢复（同 `PythonHome` / dll，**无需**重启 Unity Editor）。Settings → ① Python「域重载前关闭 Python」**默认关**（避免拖慢编译）；勾选后走轻量 Finalize。若仍报 Runtime.PythonDLL 锁定，请**重启 Unity Editor** 再 `init`。
+域重载后执行 `init` 即可恢复（同 `PythonHome` / dll，**无需**重启 Unity Editor）：托管侧重绑、原生解释器软存活（Soft-reattach）。若仍报 Runtime.PythonDLL 锁定或探活失败，请**重启 Unity Editor** 再 `init`。
 
 域重载会停止 HTTP 监听；重新打开 **Agent Chat** 或 Settings → ③ CLI 点「保存 CLI 设置」可恢复监听。
 

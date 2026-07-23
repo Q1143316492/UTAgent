@@ -512,7 +512,7 @@ namespace UTAgent.Editor.Config
 
             if (local.python != null)
             {
-                MergePython(merged.python, local.python, localRaw);
+                MergePython(merged.python, local.python);
             }
 
             if (local.bridge != null)
@@ -643,7 +643,6 @@ namespace UTAgent.Editor.Config
             {
                 home = source.home,
                 dll = source.dll,
-                shutdownBeforeDomainReload = source.shutdownBeforeDomainReload,
             };
         }
 
@@ -740,7 +739,7 @@ namespace UTAgent.Editor.Config
             }
         }
 
-        private static void MergePython(PythonDto target, PythonDto local, string localRaw = "")
+        private static void MergePython(PythonDto target, PythonDto local)
         {
             if (local.home != null)
             {
@@ -750,13 +749,6 @@ namespace UTAgent.Editor.Config
             if (!string.IsNullOrWhiteSpace(local.dll))
             {
                 target.dll = local.dll.Trim();
-            }
-
-            // JsonUtility 缺字段时 bool=false，与默认 false 一致；仅 local 显式写出时覆盖
-            if (!string.IsNullOrEmpty(localRaw) &&
-                localRaw.IndexOf("\"shutdownBeforeDomainReload\"", StringComparison.Ordinal) >= 0)
-            {
-                target.shutdownBeforeDomainReload = local.shutdownBeforeDomainReload;
             }
         }
 

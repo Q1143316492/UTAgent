@@ -33,8 +33,7 @@
     },
     "python": {
         "home": "",
-        "dll": "python312.dll",
-        "shutdownBeforeDomainReload": false
+        "dll": "python312.dll"
     },
     "bridge": {
         "enabled": true,

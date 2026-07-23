@@ -2,17 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Python.Runtime;
 using UnityEditor;
 using UnityEngine;
-using UTAgent.Editor.Config;
 using UTAgent.Editor.PythonInterop;
 
 namespace UTAgent.Editor.Core
 {
     /// <summary>
     /// Python 引擎入口。内部转发给 <see cref="IPythonEngine"/> 单例。
-    /// 域重载会破坏 pythonnet 单例状态，本类用 mInvalidated 标记失效，下次使用时提示重新初始化。
+    /// 域重载会破坏托管侧状态；恢复靠再次 Initialize（Soft-reattach），不在 Reload 前 Shutdown。
     /// </summary>
     [UnityEditor.InitializeOnLoad]
     public static class UTAgentBootstrap
@@ -33,55 +31,6 @@ namespace UTAgent.Editor.Core
         static UTAgentBootstrap()
         {
             mInvalidated = mEngine != null && mEngine.IsAvailable;
-            AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
-        }
-
-        /// <summary>
-        /// 域重载前按配置轻量关闭引擎（默认关）。开启时走 Finalize 快路径，非全量 Shutdown。
-        /// </summary>
-        private static void OnBeforeAssemblyReload()
-        {
-            try
-            {
-                UTAgentConfig.EnsureLoaded();
-                if (!UTAgentConfig.Current.python.shutdownBeforeDomainReload)
-                {
-                    return;
-                }
-
-                bool needShutdown = IsAvailable;
-                if (!needShutdown)
-                {
-                    try
-                    {
-                        needShutdown = PythonEngine.IsInitialized;
-                    }
-                    catch
-                    {
-                        needShutdown = false;
-                    }
-                }
-
-                if (!needShutdown)
-                {
-                    return;
-                }
-
-                // 轻量路径：勿调全量 Shutdown（多轮 GC 可把 Reload 拖到十余秒）
-                IPythonEngine engine = GetEngine();
-                if (engine is CPythonEngine cpython)
-                {
-                    cpython.ShutdownForDomainReload();
-                }
-                else
-                {
-                    Shutdown(reloadApp: false);
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[UTAgent] 域重载前关闭引擎失败：{e.Message}");
-            }
         }
 
         private static IPythonEngine GetEngine()
