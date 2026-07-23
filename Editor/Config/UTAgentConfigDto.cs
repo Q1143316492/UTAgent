@@ -61,6 +61,10 @@ namespace UTAgent.Editor.Config
     {
         public string home = "";
         public string dll = "python312.dll";
+        /// <summary>
+        /// 试验：仅扫描 Unity 相关程序集（默认 false）。开启后需重新初始化引擎。
+        /// </summary>
+        public bool unityAssembliesOnly;
     }
 
     [Serializable]

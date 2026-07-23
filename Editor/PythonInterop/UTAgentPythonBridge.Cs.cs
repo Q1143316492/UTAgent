@@ -82,35 +82,39 @@ namespace UTAgent.Editor.PythonInterop
                 "Unity.TextMeshPro",
             };
 
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            bool unityOnly = UTAgentConfig.Current?.python?.unityAssembliesOnly == true;
+            if (!unityOnly)
             {
-                var simpleName = asm.GetName().Name;
-                if (string.IsNullOrEmpty(simpleName))
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    continue;
-                }
-
-                if (simpleName.StartsWith("Assembly-CSharp", StringComparison.Ordinal))
-                {
-                    names.Add(simpleName);
-                    continue;
-                }
-
-                try
-                {
-                    foreach (var type in asm.GetExportedTypes())
+                    var simpleName = asm.GetName().Name;
+                    if (string.IsNullOrEmpty(simpleName))
                     {
-                        if (type.Namespace != null
-                            && type.Namespace.StartsWith("GameCore", StringComparison.Ordinal))
+                        continue;
+                    }
+
+                    if (simpleName.StartsWith("Assembly-CSharp", StringComparison.Ordinal))
+                    {
+                        names.Add(simpleName);
+                        continue;
+                    }
+
+                    try
+                    {
+                        foreach (var type in asm.GetExportedTypes())
                         {
-                            names.Add(simpleName);
-                            break;
+                            if (type.Namespace != null
+                                && type.Namespace.StartsWith("GameCore", StringComparison.Ordinal))
+                            {
+                                names.Add(simpleName);
+                                break;
+                            }
                         }
                     }
-                }
-                catch (Exception)
-                {
-                    // 部分程序集无法枚举导出类型，跳过
+                    catch (Exception)
+                    {
+                        // 部分程序集无法枚举导出类型，跳过
+                    }
                 }
             }
 
@@ -118,7 +122,7 @@ namespace UTAgent.Editor.PythonInterop
             UTAgentInitTiming.Log(
                 "cs_get_preload_assemblies",
                 sw.ElapsedMilliseconds,
-                $"domain_assemblies={domainAssemblyCount} preload_count={names.Count}");
+                $"domain_assemblies={domainAssemblyCount} preload_count={names.Count} unity_only={unityOnly}");
             var sorted = names.OrderBy(n => n).Select(BridgeJson.EscapeJson);
             return $"[{string.Join(",", sorted)}]";
         }

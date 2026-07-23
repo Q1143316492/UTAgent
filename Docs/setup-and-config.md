@@ -26,9 +26,18 @@ git submodule add git@github.com:Q1143316492/UTAgent.git Assets/UTAgent
 | Tab | 内容 |
 |-----|------|
 | 大模型 | Provider / Model、Max Steps、API Key 环境变量名 |
-| Python | 状态 +「下载并初始化」；路径/重置在「高级」 |
+| Python | 状态 +「下载并初始化」；路径/重置/试验开关在「高级」 |
 | CLI | Remote CLI 启用与端口（默认开启） |
 | 运行产物 | 目录（默认 `Assets/UTAgent/Out/`；子目录 `logs/` / `screenshots/` / `sessions/` / `exec/`） |
+
+### Python：`unityAssembliesOnly`（试验）
+
+- 配置字段：`python.unityAssembliesOnly`（defaults/`local`），**默认 `false`**
+- Settings → Python → **高级** →「仅扫描 Unity 程序集（试验）」
+- **开启后**：pythonnet 初始化只扫 Unity/系统相关程序集，可缩短公司大工程 init；`CS.业务类型` 默认不可用
+- **改开关后**须「重置引擎」再初始化（已运行的 Runtime 不会热切换扫描表）
+- 对比耗时：Console 过滤 `[UTAgent][InitTiming]`，看 `python_engine_initialize` / `unity_assemblies_only` / `assemblies=`
+- 补丁说明：`Tools/pythonnet-unity-scan/README.md`（fork 自 pythonnet v3.0.5）
 
 - 配置：`Config/utagent.defaults.json` + `Config/utagent.local.json`（gitignore）
 - API Key **不**写入 JSON

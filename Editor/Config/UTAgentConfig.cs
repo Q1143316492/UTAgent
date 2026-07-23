@@ -512,7 +512,7 @@ namespace UTAgent.Editor.Config
 
             if (local.python != null)
             {
-                MergePython(merged.python, local.python);
+                MergePython(merged.python, local.python, localRaw);
             }
 
             if (local.bridge != null)
@@ -643,6 +643,7 @@ namespace UTAgent.Editor.Config
             {
                 home = source.home,
                 dll = source.dll,
+                unityAssembliesOnly = source.unityAssembliesOnly,
             };
         }
 
@@ -739,7 +740,7 @@ namespace UTAgent.Editor.Config
             }
         }
 
-        private static void MergePython(PythonDto target, PythonDto local)
+        private static void MergePython(PythonDto target, PythonDto local, string localRaw = "")
         {
             if (local.home != null)
             {
@@ -749,6 +750,13 @@ namespace UTAgent.Editor.Config
             if (!string.IsNullOrWhiteSpace(local.dll))
             {
                 target.dll = local.dll.Trim();
+            }
+
+            // JsonUtility 缺字段时 bool=false；仅 local 显式写出时覆盖
+            if (!string.IsNullOrEmpty(localRaw) &&
+                localRaw.IndexOf("\"unityAssembliesOnly\"", StringComparison.Ordinal) >= 0)
+            {
+                target.unityAssembliesOnly = local.unityAssembliesOnly;
             }
         }
 

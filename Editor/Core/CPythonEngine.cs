@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using Python.Runtime;
 using UnityEngine;
+using UTAgent.Editor.Config;
 using Debug = UnityEngine.Debug;
 
 namespace UTAgent.Editor.Core
@@ -58,6 +59,18 @@ namespace UTAgent.Editor.Core
             {
                 string pythonHome = ResolvePythonHomeOrThrow();
                 string targetDll = Path.Combine(pythonHome, PythonHomeResolver.ResolvePythonDllFileName());
+
+                bool unityOnly = false;
+                try
+                {
+                    unityOnly = UTAgentConfig.Current?.python?.unityAssembliesOnly == true;
+                }
+                catch (Exception)
+                {
+                    unityOnly = false;
+                }
+
+                PythonnetScanAllowlist.ApplyFromConfig(unityOnly);
 
                 if (PythonEngine.IsInitialized)
                 {

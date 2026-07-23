@@ -32,6 +32,7 @@ namespace UTAgent.Editor.Config
         private string mBaseUrlOverride = "";
         private bool mFoldBaseUrlOverride;
         private bool mFoldPythonAdvanced;
+        private bool mUnityAssembliesOnly;
 
         private bool mBridgeEnabled = true;
         private int mBridgePort = UTAgentConfig.DefaultBridgePort;
@@ -140,6 +141,28 @@ namespace UTAgent.Editor.Config
             {
                 EditorGUI.indentLevel++;
                 EditorGUILayout.LabelField("路径", PythonHomeResolver.GetDisplayPythonHome());
+
+                EditorGUI.BeginChangeCheck();
+                bool unityOnly = EditorGUILayout.ToggleLeft(
+                    "仅扫描 Unity 程序集（试验）",
+                    mUnityAssembliesOnly);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    mUnityAssembliesOnly = unityOnly;
+                    UTAgentConfig.Current.python.unityAssembliesOnly = unityOnly;
+                    UTAgentConfig.SaveLocal();
+                    ShowFeedback(
+                        unityOnly
+                            ? "已开启 Unity-only Scan。请「重置引擎」后再初始化；业务 CS.* 将不可用。"
+                            : "已关闭 Unity-only Scan。请「重置引擎」后再初始化以恢复全量扫描。",
+                        MessageType.Warning,
+                        8);
+                }
+
+                EditorGUILayout.HelpBox(
+                    "默认关闭。开启后 pythonnet 只扫 Unity/系统程序集，可缩短大工程初始化；过滤关键字 InitTiming。",
+                    MessageType.None);
+
                 if (GUILayout.Button("重置引擎", GUILayout.Height(24)))
                 {
                     ResetPython();
@@ -425,6 +448,7 @@ namespace UTAgent.Editor.Config
             mBaseUrlOverride = config.llm.baseUrlOverride ?? "";
             mBridgeEnabled = config.bridge.enabled;
             mBridgePort = config.bridge.port;
+            mUnityAssembliesOnly = config.python != null && config.python.unityAssembliesOnly;
             mLogDirectory = string.IsNullOrWhiteSpace(config.log.directory)
                 ? UTAgentSessionLogger.GetDefaultLogDirectory()
                 : config.log.directory;
